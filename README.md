@@ -2,6 +2,9 @@
 
 Work on Virtua Racing Deluxe (Sega 32X, 1994), rebuilt from source.
 
+**Status: finished.** The last version is V11. It runs on a real Genesis + 32X. No further work will
+go into this project.
+
 ## What this is
 
 - A fork of [sega-vr-disasm](https://github.com/matiaszanolli/sega-vr-disasm) (MIT) by Matias Zanolli
