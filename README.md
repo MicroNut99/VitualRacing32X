@@ -41,7 +41,7 @@ and a Linux-like shell (Linux, WSL, macOS).
 3. Output: `build/vr_rebuild.32x` (4 MB). The old ROM is deleted first; if a step fails the build prints
    `*** BUILD FAILED - NO ROM WAS WRITTEN ***` and leaves no ROM.
 
-Tested in PicoDrive and Fusion 3.64. Real hardware: V8 hung after the logo (fixed in V9); V9 not yet tested.
+Tested in PicoDrive, Fusion 3.64 and on a real Genesis + 32X (V9). V3-V8 hung on real hardware after the logo (fixed in V9).
 
 ## Fixes to upstream
 
