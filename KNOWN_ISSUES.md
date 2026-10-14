@@ -504,6 +504,11 @@ When using `dcb.b (object_table_sprite_param_update+216-*),$FF` to compute paddi
   PicoDrive, so the cost is the emulator's ROM timing model, not a measured hardware fact. Renderer
   optimisation decisions need numbers from a real 32X: V11's timing line shows when the SH2
   reports its frame done ("SH2 nn%" of the 3-frame window).
+  **Measured on a real Genesis + 32X (V11, Big Forest, 1P):** SH2 frame done at 52-60% of the
+  3-frame window on straights, 65-68% at the bridges, 79-80% at the start with the pit crew;
+  68K 50-62%; FPS 20; LAG 0-1. PicoDrive showed 49-52%: the emulator is close enough. Two
+  pictures per 3 frames (40 FPS with an in-between camera) would need the SH2 done by ~45%
+  including both renders, so it is out of reach without rewriting the renderer. Not pursued.
 
 - **V9: real-hardware hang after the Sega Sports logo (V3-V8), fixed.** The pause menu's V-INT hook
   read the 32X frame buffer control register ($A1518B) every frame while FM = 1. A 68000 access to
