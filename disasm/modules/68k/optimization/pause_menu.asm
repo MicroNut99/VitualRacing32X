@@ -22,11 +22,11 @@
 ; selected line (yellow). Written into the CRAM shadow at $FF8480, which the
 ; V-INT handlers DMA to CRAM.
 ;
-; Work RAM $FFF800-$FFF83F (not used by the game: see
-; _archive/fps_counter_debug/FPS_COUNTER_STUCK_AT_00_SUMMARY.md).
+; Work RAM $FF0800-$FF08FF: zero all through attract, menus, a race and its
+; results in a RAM survey (the game keeps its records at $FFF700-$FFF8FF)
 ; ============================================================================
 
-PM_BASE         equ     $FFFFF800
+PM_BASE         equ     $00FF0800
 pm_magic        equ     PM_BASE+$00     ; .w $B532 once initialised
 pm_open         equ     PM_BASE+$02     ; .b menu on screen
 pm_sel          equ     PM_BASE+$03     ; .b selected line
@@ -82,14 +82,14 @@ pm_vram_cmd     macro
 ; pm_init: first use after power-on (work RAM is not cleared for us)
 ; ----------------------------------------------------------------------------
 pm_init:
-        cmpi.w  #$B532,(pm_magic).w
+        cmpi.w  #$B532,(pm_magic).l
         beq.s   .done
         movem.l d0/a0,-(sp)
-        lea     (PM_BASE).w,a0
+        lea     (PM_BASE).l,a0
         moveq   #$40/4-1,d0
 .clr:   clr.l   (a0)+
         dbra    d0,.clr
-        move.w  #$B532,(pm_magic).w
+        move.w  #$B532,(pm_magic).l
         movem.l (sp)+,d0/a0
 .done:  rts
 
@@ -99,35 +99,35 @@ pm_init:
 pm_vint:
         movem.l d0-d1,-(sp)
         bsr.s   pm_init
-        addq.l  #1,(pm_abs).w
-        addq.w  #1,(pm_ticks).w
+        addq.l  #1,(pm_abs).l
+        addq.w  #1,(pm_ticks).l
         tst.w   ($FFFFC87A).w                   ; 0: main loop still busy
         bne.s   .worked
-        addq.w  #1,(pm_lag).w
+        addq.w  #1,(pm_lag).l
 .worked:
         move.b  (PM_MARS_FS).l,d0                  ; frame buffer shown
         andi.b  #1,d0
-        cmp.b   (pm_fs_last).w,d0
+        cmp.b   (pm_fs_last).l,d0
         beq.s   .same
-        move.b  d0,(pm_fs_last).w
-        addq.w  #1,(pm_swaps).w
+        move.b  d0,(pm_fs_last).l
+        addq.w  #1,(pm_swaps).l
 .same:
-        cmpi.w  #60,(pm_ticks).w                ; one second
+        cmpi.w  #60,(pm_ticks).l                ; one second
         blo.s   .out
-        move.w  (pm_swaps).w,(pm_fps).w
-        move.w  (pm_lag).w,(pm_lagshow).w
-        move.l  (pm_busy).w,d0                  ; busy lines * 100 / (60 * 262)
+        move.w  (pm_swaps).l,(pm_fps).l
+        move.w  (pm_lag).l,(pm_lagshow).l
+        move.l  (pm_busy).l,d0                  ; busy lines * 100 / (60 * 262)
         mulu.w  #100,d0                         ; (fits: < 15720 lines)
         divu.w  #60*262,d0
         cmpi.w  #100,d0
         bls.s   .pct
         moveq   #100,d0
-.pct:   move.w  d0,(pm_cpu).w
-        clr.w   (pm_swaps).w
-        clr.w   (pm_ticks).w
-        clr.w   (pm_lag).w
-        clr.l   (pm_busy).w
-        st      (pm_dirty).w
+.pct:   move.w  d0,(pm_cpu).l
+        clr.w   (pm_swaps).l
+        clr.w   (pm_ticks).l
+        clr.w   (pm_lag).l
+        clr.l   (pm_busy).l
+        st      (pm_dirty).l
 .out:
         movem.l (sp)+,d0-d1
         tst.w   ($FFFFC87A).w                   ; the game's own first two
@@ -137,7 +137,7 @@ pm_vint:
 
 ; line time: V-INTs * 262 + lines since the start of vblank (d0)
 pm_line_time:
-        move.l  (pm_abs).w,d0
+        move.l  (pm_abs).l,d0
         mulu.w  #262,d0
         moveq   #0,d1
         move.b  (PM_VDP_HV).l,d1                   ; V counter
@@ -154,11 +154,11 @@ pm_loop_wait:
         movem.l d0-d7/a0-a2,-(sp)
         bsr     pm_init
         bsr.s   pm_line_time                    ; work done: count its lines
-        sub.l   (pm_t_wake).w,d0
+        sub.l   (pm_t_wake).l,d0
         bmi.s   .nocount
         cmpi.l  #262*8,d0                       ; ignore nonsense (first frame)
         bhi.s   .nocount
-        add.l   d0,(pm_busy).w
+        add.l   d0,(pm_busy).l
 .nocount:
         bsr     pm_timing_update
         movem.l (sp)+,d0-d7/a0-a2
@@ -167,7 +167,7 @@ pm_loop_wait:
         bne.s   .wait
         movem.l d0-d1,-(sp)
         bsr.s   pm_line_time
-        move.l  d0,(pm_t_wake).w
+        move.l  d0,(pm_t_wake).l
         movem.l (sp)+,d0-d1
         rts
 
@@ -192,32 +192,32 @@ pm_race_handlers:
 
 ; draw / clear the timing line (main loop context, V-INT may be pending)
 pm_timing_update:
-        tst.b   (pm_open).w
+        tst.b   (pm_open).l
         bne.s   .done
         bsr     pm_in_race
         tst.b   d0
         beq.s   .not_race
-        tst.b   (pm_timing).w
+        tst.b   (pm_timing).l
         beq.s   .off
-        tst.b   (pm_dirty).w
+        tst.b   (pm_dirty).l
         beq.s   .flush
-        clr.b   (pm_dirty).w
-        lea     (pm_fps).w,a2                   ; new numbers: both buffers again
+        clr.b   (pm_dirty).l
+        lea     (pm_fps).l,a2                   ; new numbers: both buffers again
         bsr     pm_build_numbers
-        move.b  #3,(pm_fbpend).w
-        st      (pm_drawn).w
+        move.b  #3,(pm_fbpend).l
+        st      (pm_drawn).l
         bra.s   .flush
-.off:   tst.b   (pm_drawn).w                    ; switched off: spaces over it, twice
+.off:   tst.b   (pm_drawn).l                    ; switched off: spaces over it, twice
         beq.s   .flush
-        clr.b   (pm_drawn).w
+        clr.b   (pm_drawn).l
         bsr     pm_build_blank
-        move.b  #3,(pm_fbpend).w
-.flush: tst.b   (pm_fbpend).w
+        move.b  #3,(pm_fbpend).l
+.flush: tst.b   (pm_fbpend).l
         bne     pm_fb_flush
 .done:  rts
 .not_race:
-        clr.b   (pm_drawn).w
-        clr.b   (pm_fbpend).w
+        clr.b   (pm_drawn).l
+        clr.b   (pm_fbpend).l
         rts
 
 ; text into the 32X frame buffer the 68000 can reach (the one not shown),
@@ -228,9 +228,9 @@ pm_fb_flush:
         move.b  (PM_MARS_FBC).l,d0              ; FS = buffer shown
         andi.w  #1,d0
         eori.w  #1,d0                           ; the 68000 reaches the other one
-        btst    d0,(pm_fbpend).w
+        btst    d0,(pm_fbpend).l
         beq.s   .done
-        bclr    d0,(pm_fbpend).w
+        bclr    d0,(pm_fbpend).l
         move    sr,-(sp)
         move    #$2700,sr
         bclr    #7,(PM_MARS_ADAPT).l            ; FM = 0: 68000 owns the frame buffer
@@ -253,7 +253,7 @@ pm_fb_text:
         add.l   d1,d1
         adda.l  d1,a1
         adda.w  #PM_FB_X,a1
-        lea     (PM_BASE+$40).w,a0
+        lea     (PM_BASE+$40).l,a0
 .ch:    moveq   #0,d2
         move.b  (a0)+,d2
         beq.s   .next
@@ -284,7 +284,7 @@ pm_fb_text:
 
 ; "FPS 20 68K 48% LAG 0" from the 3 words at (a2), padded to PM_FB_CHARS
 pm_build_numbers:
-        lea     (PM_BASE+$40).w,a0              ; build the text in RAM
+        lea     (PM_BASE+$40).l,a0              ; build the text in RAM
         lea     pm_t_fps(pc),a1
         bsr.s   pm_cat
         move.w  (a2)+,d0
@@ -297,7 +297,7 @@ pm_build_numbers:
         bsr.s   pm_cat
         move.w  (a2)+,d0
         bsr     pm_num
-pm_pad: lea     (PM_BASE+$40+PM_FB_CHARS).w,a1
+pm_pad: lea     (PM_BASE+$40+PM_FB_CHARS).l,a1
 .p:     cmpa.l  a1,a0
         bhs.s   .e
         move.b  #' ',(a0)+
@@ -306,7 +306,7 @@ pm_pad: lea     (PM_BASE+$40+PM_FB_CHARS).w,a1
         rts
 
 pm_build_blank:
-        lea     (PM_BASE+$40).w,a0
+        lea     (PM_BASE+$40).l,a0
         bra.s   pm_pad
 
 ; the numbers in the pause menu (plane A), row d4, col d5
@@ -315,7 +315,7 @@ pm_draw_numbers:
         move.w  d4,d0
         move.w  d5,d1
         move.w  #PM_ATTR,d3
-        lea     (PM_BASE+$40).w,a0
+        lea     (PM_BASE+$40).l,a0
         bra     pm_text
 
 ; copy the string (a1) to (a0)+, without its 0
@@ -515,12 +515,12 @@ pm_draw_menu:
         addi.w  #PM_MENU_ROW+3,d0
         moveq   #PM_MENU_COL+1,d1
         move.w  #PM_ATTR,d3
-        cmp.b   (pm_sel).w,d4
+        cmp.b   (pm_sel).l,d4
         bne.s   .n
         move.w  #PM_ATTR_SEL,d3
 .n:     movem.l d0/d3-d4,-(sp)
         lea     .mark(pc),a0                    ; "> " or "  "
-        cmp.b   (pm_sel).w,d4
+        cmp.b   (pm_sel).l,d4
         beq.s   .m
         lea     .nomark(pc),a0
 .m:     bsr     pm_text
@@ -537,19 +537,19 @@ pm_draw_menu:
         lea     pm_s_on(pc),a0
         cmpi.w  #3,d4
         bne.s   .tim
-        tst.b   (pm_interp_off).w
+        tst.b   (pm_interp_off).l
         beq.s   .sw
         lea     pm_s_off(pc),a0
         bra.s   .sw
-.tim:   tst.b   (pm_timing).w
+.tim:   tst.b   (pm_timing).l
         bne.s   .sw
         lea     pm_s_off(pc),a0
 .sw:    moveq   #PM_MENU_COL+18,d1
         bsr     pm_text
 .next:  addq.w  #1,d4
         cmpi.w  #PM_ITEMS,d4
-        blo.s   .i
-        lea     (PM_BASE+$38).w,a2              ; racing numbers from before the pause
+        blo     .i
+        lea     (PM_BASE+$38).l,a2              ; racing numbers from before the pause
         moveq   #PM_MENU_ROW+9,d4
         moveq   #PM_MENU_COL+1,d5
         bsr     pm_draw_numbers
@@ -578,10 +578,10 @@ pm_clear_menu:
         movem.l (sp)+,d0/d4
         addq.w  #1,d0
         dbra    d4,.c
-        clr.b   (pm_open).w
+        clr.b   (pm_open).l
         moveq   #1,d0                           ; 32X picture back (packed pixel mode)
         bsr     pm_set_mode
-        st      (pm_dirty).w                    ; timing line back at once
+        st      (pm_dirty).l                    ; timing line back at once
         rts
 
 ; ----------------------------------------------------------------------------
@@ -596,22 +596,22 @@ pm_pause_tick:
 .one:   movem.l d0-d7/a0-a2,-(sp)
         bsr.s   .menu                           ; d0 = 0: stay, 1 continue, 2 quit
         movem.l (sp)+,d0-d7/a0-a2
-        tst.b   (PM_BASE+$22).w
+        tst.b   (PM_BASE+$22).l
         beq.s   .stay
-        cmpi.b  #1,(PM_BASE+$22).w
+        cmpi.b  #1,(PM_BASE+$22).l
         bne.s   .quit
         jmp     ($00880000+set_timer_val).l     ; CONTINUE: the game's unpause
 .quit:  jmp     ($00880000+sound_queue_enable_flags_advance_state).l
 .stay:  rts
 
-.menu:  clr.b   (PM_BASE+$22).w
+.menu:  clr.b   (PM_BASE+$22).l
         move.b  #0,($FF69F0).l                  ; no SH2 "PAUSE" text under the menu
-        tst.b   (pm_open).w
+        tst.b   (pm_open).l
         bne.s   .input
-        st      (pm_open).w
-        clr.b   (pm_sel).w
-        move.l  (pm_fps).w,(PM_BASE+$38).w     ; the numbers from just before pausing
-        move.w  (pm_lagshow).w,(PM_BASE+$3C).w
+        st      (pm_open).l
+        clr.b   (pm_sel).l
+        move.l  (pm_fps).l,(PM_BASE+$38).l     ; the numbers from just before pausing
+        move.w  (pm_lagshow).l,(PM_BASE+$3C).l
         moveq   #0,d0                           ; 32X picture off while the menu is up
         bsr     pm_set_mode                     ; (its sky and some 3D colours always
                                                 ; show in front of the Genesis planes)
@@ -620,22 +620,22 @@ pm_pause_tick:
 .input: move.b  ($FFFFC86D).w,d0                ; newly pressed: S A C B R L D U
         btst    #0,d0
         beq.s   .down
-        subq.b  #1,(pm_sel).w
+        subq.b  #1,(pm_sel).l
         bpl     pm_draw_menu
-        move.b  #PM_ITEMS-1,(pm_sel).w
+        move.b  #PM_ITEMS-1,(pm_sel).l
         bra     pm_draw_menu
 .down:  btst    #1,d0
         beq.s   .lr
-        addq.b  #1,(pm_sel).w
-        cmpi.b  #PM_ITEMS,(pm_sel).w
+        addq.b  #1,(pm_sel).l
+        cmpi.b  #PM_ITEMS,(pm_sel).l
         blo     pm_draw_menu
-        clr.b   (pm_sel).w
+        clr.b   (pm_sel).l
         bra     pm_draw_menu
 .lr:    move.b  d0,d1
         andi.b  #$EC,d1                         ; Start, A, C, Right, Left
         beq.s   .none
         moveq   #0,d5
-        move.b  (pm_sel).w,d5
+        move.b  (pm_sel).l,d5
         cmpi.b  #3,d5
         beq.s   .cam
         cmpi.b  #4,d5
@@ -643,18 +643,18 @@ pm_pause_tick:
         andi.b  #$E0,d0                         ; actions: Start, A or C only
         beq.s   .none
         bsr     pm_clear_menu
-        move.b  #1,(PM_BASE+$22).w              ; continue
+        move.b  #1,(PM_BASE+$22).l              ; continue
         tst.b   d5
         beq.s   .none
-        move.b  #2,(PM_BASE+$22).w              ; quit or restart
-        clr.b   (pm_restart).w
+        move.b  #2,(PM_BASE+$22).l              ; quit or restart
+        clr.b   (pm_restart).l
         cmpi.b  #1,d5
         bne.s   .none
-        st      (pm_restart).w
+        st      (pm_restart).l
         rts
-.cam:   not.b   (pm_interp_off).w
+.cam:   not.b   (pm_interp_off).l
         bra     pm_draw_menu
-.tim:   not.b   (pm_timing).w
+.tim:   not.b   (pm_timing).l
         bra     pm_draw_menu
 .none:  rts
 
@@ -662,11 +662,11 @@ pm_pause_tick:
 ; pm_quit_stage: pause sub-state [10], after the game's quit teardown
 ; ----------------------------------------------------------------------------
 pm_quit_stage:
-        tst.b   (pm_restart).w
+        tst.b   (pm_restart).l
         bne.s   .restart
         jmp     ($00880000+sh2_handler_dispatch_scene_init).l
 .restart:
-        clr.b   (pm_restart).w
+        clr.b   (pm_restart).l
         jsr     ($00880000+display_digit_extract).l
         jmp     ($00880000+sh2_scene_reset_name_entry_mode_disp).l  ; course select
 
