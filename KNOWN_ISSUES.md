@@ -497,6 +497,15 @@ When using `dcb.b (object_table_sprite_param_update+216-*),$FF` to compute paddi
 
 ### VirtuaRacing32X findings (October 2026, measured in PicoDrive with the pause menu's timing line and RAM dumps)
 
+- **V9: real-hardware hang after the Sega Sports logo (V3-V8), fixed.** The pause menu's V-INT hook
+  read the 32X frame buffer control register ($A1518B) every frame while FM = 1. A 68000 access to
+  the 32X VDP registers with FM = 1 waits until FM = 0 (hardware manual, "VDP Access Competition");
+  only the 68000 itself would clear FM, so it hung for good. Emulators do not model the wait.
+  Now the swap count uses the game's frame toggle ($C80C bit 0), and the timing line reads FS only
+  after FM = 0, like the game's own swap handlers. Rule: the 68000 never touches $A15180-$A153FF
+  or the frame buffer unless it cleared FM first. A PicoDrive build that logs such accesses
+  (68000 at $A15180-$A153FF with FM = 1) shows: original none, V8 from frame 422, V9 none.
+
 - **V8 audit: every upstream change in the original game area checked against the original ROM.**
   Method: list every byte range where the build differs from the original in `$000000-$2FFFFF`,
   then run the original and the build in PicoDrive with the same scripted pad input and compare

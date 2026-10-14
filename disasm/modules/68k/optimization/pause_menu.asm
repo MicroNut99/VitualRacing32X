@@ -47,7 +47,6 @@ pm_lagshow      equ     PM_BASE+$20     ; .w shown: lag frames per second
 PM_VDP_DATA        equ     $C00000
 PM_VDP_CTRL        equ     $C00004
 PM_VDP_HV          equ     $C00008
-PM_MARS_FS         equ     $A1518B         ; 32X frame buffer select (bit 0)
 PM_COMM0_HI        equ     $A15120
 PM_COMM1_LO        equ     $A15123
 
@@ -103,8 +102,10 @@ pm_vint:
         bne.s   .worked
         addq.w  #1,(pm_lag).l
 .worked:
-        move.b  (PM_MARS_FS).l,d0                  ; frame buffer shown
-        andi.b  #1,d0
+        move.b  ($FFFFC80C).w,d0                ; the game's frame toggle: it flips it at
+        andi.b  #1,d0                           ; every swap. (Never read the 32X VDP
+                                                ; registers here: with FM = 1 a 68000 access
+                                                ; waits for FM = 0, on a real 32X for ever.)
         cmp.b   (pm_fs_last).l,d0
         beq.s   .same
         move.b  d0,(pm_fs_last).l
@@ -223,17 +224,19 @@ pm_timing_update:
 pm_fb_flush:
         bsr     pm_sh2_done                     ; SH2 frame done: no SH2 frame
         beq.s   .done                           ; buffer access now
-        move.b  (PM_MARS_FBC).l,d0              ; FS = buffer shown
+        tst.b   (pm_fbpend).l
+        beq.s   .done
+        move    sr,-(sp)
+        move    #$2700,sr
+        bclr    #7,(PM_MARS_ADAPT).l            ; FM = 0: the 68000 may touch the 32X VDP
+        move.b  (PM_MARS_FBC).l,d0              ; FS = buffer shown (read only with FM = 0)
         andi.w  #1,d0
         eori.w  #1,d0                           ; the 68000 reaches the other one
         btst    d0,(pm_fbpend).l
-        beq.s   .done
+        beq.s   .give
         bclr    d0,(pm_fbpend).l
-        move    sr,-(sp)
-        move    #$2700,sr
-        bclr    #7,(PM_MARS_ADAPT).l            ; FM = 0: 68000 owns the frame buffer
         bsr.s   pm_fb_text
-        bset    #7,(PM_MARS_ADAPT).l            ; FM = 1
+.give:  bset    #7,(PM_MARS_ADAPT).l            ; FM = 1
         move    (sp)+,sr
 .done:  rts
 

@@ -41,7 +41,7 @@ and a Linux-like shell (Linux, WSL, macOS).
 3. Output: `build/vr_rebuild.32x` (4 MB). The old ROM is deleted first; if a step fails the build prints
    `*** BUILD FAILED - NO ROM WAS WRITTEN ***` and leaves no ROM.
 
-Tested in PicoDrive. Fusion and real hardware: not yet.
+Tested in PicoDrive and Fusion 3.64. Real hardware: V8 hung after the logo (fixed in V9); V9 not yet tested.
 
 ## Fixes to upstream
 
@@ -65,7 +65,11 @@ Tested in PicoDrive. Fusion and real hardware: not yet.
   Upstream changes that still differ give identical pictures: the S-1 sprite update, S-6 Phase A
   vertex transform, the STOP in `wait_for_vblank`, the Slave idle check.
 
-## Pause menu (V3-V8)
+- **V9: real hardware.** V3-V8 hung on a real 32X right after the Sega Sports logo: the pause
+  menu code read a 32X video register without first taking it from the SH2s. Fixed; see
+  KNOWN_ISSUES.md.
+
+## Pause menu (V3-V9)
 
 Start during a 1-player race opens the menu (2-player races keep the game's own pause).
 The 32X picture is switched off while the menu is up, so the menu is always readable.
@@ -77,7 +81,7 @@ The 32X picture is switched off while the menu is up, so the menu is always read
 | QUIT RACE | the game's own quit (A+B+C): to the result screen |
 | TIMING | on: the numbers below are also shown live during the race, bottom middle, in the black strip under the 3D view. They are drawn into both 32X frame buffers once a second (the 68000 takes the frame buffer for a moment after the SH2 finished its frame), which costs about 1 lag frame a second |
 | `FPS 20 68K 48% LAG 0` | the last second before pausing: frames shown per second (32X frame-buffer swaps), 68000 busy time, frames where the 68000 was still busy at vblank |
-| `VR32X V8 10-13 22:30` | version and build time (month-day hour:minute, Pacific), written by the Makefile, so a screenshot shows which build ran |
+| `VR32X V9 10-13 22:13` | version and build time (month-day hour:minute, Pacific), written by the Makefile, so a screenshot shows which build ran |
 
 Up/Down choose, A, C or Start select, Left/Right also switch ON/OFF.
 
