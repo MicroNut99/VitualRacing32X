@@ -223,7 +223,7 @@ pm_timing_update:
 ; text into the 32X frame buffer the 68000 can reach (the one not shown),
 ; when the SH2 has finished its frame; each buffer once per new text
 pm_fb_flush:
-        btst    #0,(PM_COMM1_LO).l              ; SH2 frame done: no SH2 frame
+        bsr     pm_sh2_done                     ; SH2 frame done: no SH2 frame
         beq.s   .done                           ; buffer access now
         move.b  (PM_MARS_FBC).l,d0              ; FS = buffer shown
         andi.w  #1,d0
@@ -454,6 +454,17 @@ pm_fill:
         dbra    d2,.f
         rts
 
+; Z clear: SH2 frame done (COMM1_LO bit 0). The SH2 may be writing the
+; register, so read it until two reads agree.
+pm_sh2_done:
+        move.w  d1,-(sp)
+.r:     move.b  (PM_COMM1_LO).l,d1
+        cmp.b   (PM_COMM1_LO).l,d1
+        bne.s   .r
+        btst    #0,d1
+        movem.w (sp)+,d1                        ; keeps the flags
+        rts
+
 ; ----------------------------------------------------------------------------
 ; pm_set_mode: 32X bitmap mode = d0 (0 blank, 1 packed pixel, the race's).
 ; The 68000 may write the 32X VDP only while FM = 0, so FM is handed to the
@@ -461,7 +472,7 @@ pm_fill:
 ; ----------------------------------------------------------------------------
 pm_set_mode:
         move.l  #200000,d1
-.w:     btst    #0,(PM_COMM1_LO).l              ; SH2 frame done
+.w:     bsr     pm_sh2_done                     ; SH2 frame done
         bne.s   .go
         subq.l  #1,d1
         bne.s   .w
@@ -488,7 +499,7 @@ pm_s_quit:      dc.b    "QUIT RACE",0
 pm_s_cam:       dc.b    "2P 40 FPS CAM",0
 pm_s_timing:    dc.b    "TIMING",0
 pm_s_title:     dc.b    "PAUSED",0
-pm_s_ver:       dc.b    "VIRTUARACING32X V5",0
+pm_s_ver:       include "../build/pm_stamp.inc"   ; "VR32X V6 mm-dd hh:mm", made by the Makefile
 pm_s_help:      dc.b    "UP/DOWN  A/START OK",0
 pm_s_on:        dc.b    " ON",0
 pm_s_off:       dc.b    "OFF",0
@@ -555,7 +566,7 @@ pm_draw_menu:
         bsr     pm_draw_numbers
         lea     pm_s_ver(pc),a0
         moveq   #PM_MENU_ROW+10,d0
-        moveq   #PM_MENU_COL+2,d1
+        moveq   #PM_MENU_COL+1,d1
         move.w  #PM_ATTR,d3
         bsr     pm_text
         lea     pm_s_help(pc),a0

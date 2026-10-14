@@ -20,6 +20,7 @@ ORIGINAL_ROM ?= roms/Virtua Racing Deluxe (USA).32x
 ROM_MD5 = 72b1ad0f949f68da7d0a6339ecd51a3f
 SECTIONS_STAMP = disasm/sections/.stamp
 OUTPUT_ROM = $(BUILD_DIR)/vr_rebuild.32x
+VR_VERSION = V6
 
 # Assembly flags
 # -Fbin = binary output
@@ -53,9 +54,11 @@ dirs:
 # Build the ROM from original sections/
 # Depends on SH2 assembly to ensure generated includes exist
 $(OUTPUT_ROM): $(M68K_SRC) $(SECTIONS_STAMP) $(shell find disasm/modules disasm/sections_src -name "*.asm") $(SH2_FUNC000_INC) $(SH2_FUNC022_INC) $(SH2_FUNC017_INC) $(SH2_FUNC018_INC) $(SH2_FUNC019_INC) $(SH2_FUNC020_INC) $(SH2_FUNC021_ORIG_INC) $(SH2_FUNC023_INC) $(SH2_FUNC040_INC) $(SH2_FUNC032_INC) $(SH2_FUNC011_INC) $(SH2_FUNC012_INC) $(SH2_FUNC013_INC) $(SH2_FUNC014_015_INC) $(SH2_FUNC024_INC) $(SH2_FUNC025_INC) $(SH2_FUNC026_INC) $(SH2_FUNC001_INC) $(SH2_FUNC002_INC) $(SH2_FUNC003_004_INC) $(SH2_FUNC029_030_031_INC) $(SH2_FUNC033_INC) $(SH2_FUNC034_INC) $(SH2_FUNC036_INC) $(SH2_FUNC037_038_039_INC) $(SH2_FUNC005_INC) $(SH2_FUNC007_INC) $(SH2_FUNC006_INC) $(SH2_FUNC008_INC) $(SH2_FUNC016_INC) $(SH2_FUNC065_INC) $(SH2_FUNC066_INC) $(SH2_FUNC021_OPT_INC) $(SH2_BATCH_COPY_INC) $(SH2_CMD27_DRAIN_INC) $(SH2_SLAVE_WRAPPER_V2_INC) $(SH2_HANDLER_FRAME_SYNC_INC) $(SH2_MASTER_DISPATCH_HOOK_INC) $(SH2_SLAVE_TEST_FUNC_INC) $(SH2_SHADOW_PATH_WRAPPER_INC) $(SH2_CMDINT_HANDLER_INC) $(SH2_QUEUE_PROCESSOR_INC) $(SH2_GEN_DRAIN_INC)
+	@rm -f $@
+	@printf '        dc.b    "VR32X $(VR_VERSION) %s",0\n' "$$(TZ=America/Los_Angeles date '+%m-%d %H:%M')" > $(BUILD_DIR)/pm_stamp.inc
 	@echo "==> Assembling 68000 code (from sections/)..."
-	$(ASM) $(ASMFLAGS) -o $@ $<
-	$(PYTHON) tools/fixrom.py $@
+	$(ASM) $(ASMFLAGS) -o $@ $< || { rm -f $@; echo "*** BUILD FAILED - NO ROM WAS WRITTEN ***"; exit 1; }
+	$(PYTHON) tools/fixrom.py $@ || { rm -f $@; echo "*** BUILD FAILED - NO ROM WAS WRITTEN ***"; exit 1; }
 	@echo "==> Build complete: $@"
 	@ls -lh $@
 

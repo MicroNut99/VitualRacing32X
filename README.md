@@ -38,11 +38,12 @@ and a Linux-like shell (Linux, WSL, macOS).
 1. Put your ROM at `roms/Virtua Racing Deluxe (USA).32x`
    (3,145,728 bytes, MD5 `72b1ad0f949f68da7d0a6339ecd51a3f`; the build checks it).
 2. `make all`
-3. Output: `build/vr_rebuild.32x` (4 MB).
+3. Output: `build/vr_rebuild.32x` (4 MB). The old ROM is deleted first; if a step fails the build prints
+   `*** BUILD FAILED - NO ROM WAS WRITTEN ***` and leaves no ROM.
 
 Tested in PicoDrive. Fusion and real hardware: not yet.
 
-## Pause menu (V3-V5)
+## Pause menu (V3-V6)
 
 Start during a 1-player race opens the menu (2-player races keep the game's own pause).
 The 32X picture is switched off while the menu is up, so the menu is always readable.
@@ -55,8 +56,12 @@ The 32X picture is switched off while the menu is up, so the menu is always read
 | 2P 40 FPS CAM | upstream's camera interpolation on/off. It only runs in 2-player races (dispatcher `$005020`); the 1-player race is 20 fps either way (see KNOWN_ISSUES.md) |
 | TIMING | on: the numbers below are also shown live during the race, bottom middle, in the black strip under the 3D view. They are drawn into both 32X frame buffers once a second (the 68000 takes the frame buffer for a moment after the SH2 finished its frame), which costs about 1 lag frame a second |
 | `FPS 20 68K 48% LAG 0` | the last second before pausing: frames shown per second (32X frame-buffer swaps), 68000 busy time, frames where the 68000 was still busy at vblank |
+| `VR32X V6 10-13 21:19` | version and build time (month-day hour:minute, Pacific), written by the Makefile, so a screenshot shows which build ran |
 
 Up/Down choose, A, C or Start select, Left/Right also switch ON/OFF.
+
+The SH2's "frame done" bit (COMM1_LO bit 0) is read until two reads agree before the 68000 takes
+the frame buffer (V6): the SH2 can be writing that register at the moment it is read.
 
 The SH2s' busy time is not shown: the 68000 cannot read the SH2 memory, and the COMM registers
 are all in use.
