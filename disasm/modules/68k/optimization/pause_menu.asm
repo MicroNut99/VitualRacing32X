@@ -485,10 +485,10 @@ pm_items:
 pm_s_cont:      dc.b    "CONTINUE",0
 pm_s_restart:   dc.b    "RETRY COURSE",0
 pm_s_quit:      dc.b    "QUIT RACE",0
-pm_s_cam:       dc.b    "40 FPS CAMERA",0
+pm_s_cam:       dc.b    "2P 40 FPS CAM",0
 pm_s_timing:    dc.b    "TIMING",0
 pm_s_title:     dc.b    "PAUSED",0
-pm_s_ver:       dc.b    "VIRTUARACING32X V4",0
+pm_s_ver:       dc.b    "VIRTUARACING32X V5",0
 pm_s_help:      dc.b    "UP/DOWN  A/START OK",0
 pm_s_on:        dc.b    " ON",0
 pm_s_off:       dc.b    "OFF",0

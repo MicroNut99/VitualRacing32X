@@ -495,6 +495,20 @@ These are raw absolute addresses. Making them label-based (`dc.l label+$00880000
 ### vasm `dcb.b (label_expr),val` Does Not Work
 When using `dcb.b (object_table_sprite_param_update+216-*),$FF` to compute padding dynamically, vasm evaluates `*` as the address BEFORE the code between the label and the `dcb.b`, producing incorrect padding. **Always use hardcoded byte counts** for `dcb.b` padding after trampoline code.
 
+### VirtuaRacing32X findings (October 2026, measured in PicoDrive with the pause menu's timing line and RAM dumps)
+
+- **The dispatcher labels below are wrong.** While a 1-player race is driven, `$FF0002` = `$00884CBC`
+  (`state_disp_004cb8`, the "pre-race" one below). `state_disp_005020` calls
+  `gfx_2_player_entity_frame_orch`: it is the **2-player** race. So A-1 (40 FPS camera) only runs in
+  2-player races; the 1-player race is 20 FPS.
+- **A-1 cannot simply be copied to the 1-player race.** Tried (V5 work, reverted): state 0 sends the
+  scene, state 4's V-INT swaps frame A when COMM1_LO bit 0 is set and a second render B is sent with
+  the camera moved on by half a step. While racing, frame A was never done by the end of state 4's TV
+  frame (0 of 193 cycles; only during the countdown), so B never ran. The 1-player SH2 frame takes more
+  than one TV frame; a second render per 3-frame cycle needs a faster SH2 frame first.
+- **`$FFF700-$FFF8FF` is the game's record/ranking table** (names and times), not free RAM.
+  `$FF0800-$FF08FF` stayed zero through attract, menus, a race and results (VirtuaRacing32X uses it).
+
 ### State Dispatcher Coverage Gap
 Only `state_disp_005020` (active racing) is hooked for camera snapshot in state 0. The other 4 race dispatchers (`004cb8` pre-race, `005308` post-race, `005586` attract, `005618` replay) call `mars_dma_xfer_vdp_fill` directly without snapshots. Similarly, only `frame_update_orch_005070` (state 4 of `005020`) is hooked for the interpolation epilogue. Non-racing modes and other race phases still run at 20 FPS.
 
