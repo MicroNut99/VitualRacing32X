@@ -34,9 +34,9 @@ state_disp_ctrl_poll_sprite_update:
 ; --- jump table (6 longword entries) ---
         dc.l    $008857CA                       ; $0057A4  [00] → $0057CA (past fn)
         dc.l    $008857D0                       ; $0057A8  [04] → $0057D0 (past fn)
-        dc.l    $008857D8                       ; $0057AC  [08] → $0057D8 (past fn)
+        dc.l    $00880000+pm_pause_tick         ; $0057AC  [08] VR32X pause menu (was $008857D8)
         dc.l    $0088584A                       ; $0057B0  [0C] → $00584A (past fn)
-        dc.l    $00885866                       ; $0057B4  [10] → $005866 (past fn)
+        dc.l    $00880000+pm_quit_stage         ; $0057B4  [10] VR32X quit / restart (was $00885866)
         dc.l    $008858B4                       ; $0057B8  [14] → $0058B4 (past fn)
 ; --- second entry: scene counter advance ---
         addq.b  #1,($FFFFC886).w               ; $0057BC  scene counter++

@@ -61,8 +61,8 @@
 ; Note: .w suffix forces absolute short addressing (4 bytes vs 6 for long)
 ; ============================================================================
 vint_handler:                           ; $001684
-        tst.w   $FFFFC87A.w             ; Check pending V-INT state
-        beq.s   .no_work                ; If zero, nothing to do
+        jmp     ($00880000+pm_vint).l   ; VR32X: frame/swap counting, then the 2 lines below
+                                        ; (tst.w $C87A / beq.s .no_work) are done there
 
         move.w  #$2700,sr               ; Disable all interrupts
         movem.l d0-d7/a0-a6,-(sp)       ; Save 14 registers

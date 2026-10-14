@@ -34,4 +34,7 @@
 ; --- S-1: LOD culling enhanced sprite param update (relocated from code_2200) ---
         include "modules/68k/game/render/object_table_sprite_param_update.asm"
 
+; --- VR32X: pause menu and timing line ---
+        include "modules/68k/optimization/pause_menu.asm"
+
         dcb.b   ($01E200-*),$FF

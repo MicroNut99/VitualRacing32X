@@ -42,6 +42,29 @@ and a Linux-like shell (Linux, WSL, macOS).
 
 Tested in PicoDrive. Fusion and real hardware: not yet.
 
+## Pause menu (V3)
+
+Start during a 1-player race opens the menu (2-player races keep the game's own pause).
+The 32X picture is switched off while the menu is up, so the menu is always readable.
+
+| Line | Does |
+|---|---|
+| CONTINUE | back to the race (the game's own unpause) |
+| RETRY COURSE | back to the course select with the same car and course; Start races again |
+| QUIT RACE | the game's own quit (A+B+C): to the result screen |
+| 40 FPS CAMERA | upstream's camera interpolation on/off. It only runs in the race mode that uses dispatcher `$005020`; in the 1-player race it changes nothing (20 fps either way) |
+| TIMING | on: the numbers below are also shown live during the race (row 4, readable where the sky is) |
+| `FPS 20 68K 48% LAG 0` | the last second before pausing: frames shown per second (32X frame-buffer swaps), 68000 busy time, frames where the 68000 was still busy at vblank |
+
+Up/Down choose, A, C or Start select, Left/Right also switch ON/OFF.
+
+The SH2s' busy time is not shown: the 68000 cannot read the SH2 memory, and the COMM registers
+are all in use.
+
+Code: `disasm/modules/68k/optimization/pause_menu.asm` (in the free ROM at `$01C2DC`), hooked in at
+the main loop (`vdp_display_init.asm`), the V-INT handler (`code_200.asm`), the pause sub-state table
+(`state_disp_ctrl_poll_sprite_update.asm`) and `state4_epilogue` (`code_2200.asm`), each marked `VR32X`.
+
 ## Where the time goes (from upstream's profiling)
 
 | CPU | Busy | Job |

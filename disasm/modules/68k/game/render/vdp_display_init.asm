@@ -150,9 +150,10 @@ vdp_display_init:
 .normal_dispatch_loop:
         JSR     $00894262                       ; $000F92
         MOVE.W  #$0004,(-14214).W               ; $000F98: V-INT state (self-modified via $FF0008)
-        stop    #$2300                          ; $000F9E: halt until interrupt (level 4+)
-        tst.w   (-14214).w                      ; $000FA2: V-INT cleared $C87A? (spurious H-INT filter)
-        bne.s   .normal_dispatch_loop+12        ; $000FA6: no → back to STOP (H-INT wake, not V-INT)
+        ; VR32X: STOP / wait for V-INT moved into pm_loop_wait (68K time, timing line)
+        jsr     ($00880000+pm_loop_wait).l      ; $000F9E
+        nop                                     ; $000FA4
+        bra.s   .normal_dispatch_loop           ; $000FA6
         BRA.S  .normal_dispatch_loop                        ; $000FA8
 .alt_dispatch_loop:
         JSR     $00884CBC                       ; $000FAA

@@ -140,6 +140,8 @@ camera_avg_and_redma:
 ; Size: 102 bytes
 ; ============================================================================
 state4_epilogue:
+        tst.b   ($FFFFF805).w                  ; VR32X: pm_interp_off (pause menu)
+        bne.s   .original                      ; 40 FPS camera off: the original state 4 tail
 ; --- Block-copy current SH2 render (camera N) to framebuffer ---
 ; Same params as sh2_geometry_transfer_and_palette_cycle_handler
         movea.l #$06038000,a0                  ; 3D geometry source (SDRAM)
@@ -162,6 +164,7 @@ state4_epilogue:
 ; --- Interpolate camera and trigger second SH2 render ---
         jsr     camera_avg_and_redma(pc)
 ; --- Original state 4 epilogue ---
+.original:
         addq.w  #4,($FFFFC87E).w               ; advance game_state
         move.w  #$001C,$00FF0008               ; V-INT state = sprite_cfg
         rts
@@ -169,7 +172,7 @@ state4_epilogue:
 ; Padding to maintain 216-byte total trampoline size.
 ; Code = 6 (JMP) + 46 (snapshot) + 38 (avg) + 102 (epilogue) = 192 bytes.
 ; Padding = 216 - 192 = 24 bytes.
-        dcb.b   24,$FF
+        dcb.b   18,$FF                         ; VR32X: 6 bytes used by the switch above
         include "modules/68k/game/collision/object_proximity_check_jump_table_dispatch.asm"
         include "modules/68k/game/state/conditional_return_on_disp_flag.asm"
         include "modules/68k/game/collision/proximity_check_with_sine_billboard.asm"
