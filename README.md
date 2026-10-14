@@ -43,7 +43,14 @@ and a Linux-like shell (Linux, WSL, macOS).
 
 Tested in PicoDrive. Fusion and real hardware: not yet.
 
-## Pause menu (V3-V6)
+## Fixes to upstream
+
+- **V7: car select and menu fades back to full speed.** Upstream's single-shot command $22 and its
+  async command $27 put their data in the same COMM registers at the same time; the car select drew a
+  new picture only every 6-7 frames and the stripe fades between menus took about 4 times longer.
+  Both senders and the jump table entry are back to the original game code. See KNOWN_ISSUES.md.
+
+## Pause menu (V3-V7)
 
 Start during a 1-player race opens the menu (2-player races keep the game's own pause).
 The 32X picture is switched off while the menu is up, so the menu is always readable.
@@ -56,7 +63,7 @@ The 32X picture is switched off while the menu is up, so the menu is always read
 | 2P 40 FPS CAM | upstream's camera interpolation on/off. It only runs in 2-player races (dispatcher `$005020`); the 1-player race is 20 fps either way (see KNOWN_ISSUES.md) |
 | TIMING | on: the numbers below are also shown live during the race, bottom middle, in the black strip under the 3D view. They are drawn into both 32X frame buffers once a second (the 68000 takes the frame buffer for a moment after the SH2 finished its frame), which costs about 1 lag frame a second |
 | `FPS 20 68K 48% LAG 0` | the last second before pausing: frames shown per second (32X frame-buffer swaps), 68000 busy time, frames where the 68000 was still busy at vblank |
-| `VR32X V6 10-13 21:19` | version and build time (month-day hour:minute, Pacific), written by the Makefile, so a screenshot shows which build ran |
+| `VR32X V7 10-13 21:40` | version and build time (month-day hour:minute, Pacific), written by the Makefile, so a screenshot shows which build ran |
 
 Up/Down choose, A, C or Start select, Left/Right also switch ON/OFF.
 

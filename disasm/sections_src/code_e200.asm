@@ -251,111 +251,70 @@ sh2_send_cmd_wait:
         nop                                     ; $00E358
 
 ; ============================================================================
-; sh2_send_cmd ($00E35A) - Direct Command Send (cmd $22) — B-004 v6-corrected
+; sh2_send_cmd ($00E35A) - Direct Command Send (cmd $22), original game code
 ; ============================================================================
-; Purpose: Single-shot 2D block copy via SH2 expansion handler.
-; Called by: text_render, various graphics functions (14+ call sites)
+; VR32X V7: the original 3-phase handshake is back. Upstream's single-shot
+; version (B-004) and async sh2_cmd_27 (B-003) both put parameters in
+; $A15124-$A1512D at the same time; together they slowed the car select and
+; the menu fades to about a quarter speed (see KNOWN_ISSUES.md).
+; Called by: text_render, various graphics functions (14 call sites)
 ; Parameters:
-;   A0 = Source pointer (SH2 SDRAM address, $06xxxxxx)
-;   A1 = Destination pointer (SH2 framebuffer, $04xxxxxx or $24xxxxxx)
-;   D0 = Width in bytes per row (halved to words/row before sending)
-;   D1 = Height in rows
+;   A0 = Data pointer (written to $A15128 in phase 3)
+;   A1 = Secondary pointer (written to $A15128 in phase 1)
+;   D0 = Parameter 1 (width/count, $A15128 in phase 2)
+;   D1 = Parameter 2 (height/type, $A1512A in phase 2)
 ; Clobbers: Nothing
-; Preserves: D0-D7, A0-A6 (all registers preserved; D0 saved/restored via stack)
-;
-; Protocol (B-004 v6-corrected — COMM2_HI never written + params-consumed handshake):
-;   1. Wait for COMM0_HI==0 (previous command done)
-;   2. Write COMM3:4 = A0 longword ($06xxxxxx; COMM3_HI gets $06 briefly)
-;   3. Write COMM3_HI = D1 — OVERWRITES the $06 from step 2 with height
-;   4. Write COMM5:6 = A1 longword (dst ptr)
-;   5. Write COMM2_LO = D0/2 — COMM2_HI ($A15124) stays $00 ALWAYS
-;   6. Write COMM0_LO = $22 (dispatch index), COMM0_HI = $01 (trigger)
-;   7. Wait for COMM0_LO==0 — SH2 clears this after reading all params
-;
-; COMM2_HI SAFETY: $A15124 (COMM2_HI) is NEVER WRITTEN — stays $00 permanently.
-;   Slave polls COMM2_HI every ~25 SH2 cycles. Writing A0 to COMM3 ($A15126)
-;   is safe — Slave does not poll COMM3_HI. The $06 written to COMM3_HI by the
-;   A0 longword write is immediately overwritten by D1 (the height byte).
-;   COMM1, COMM7 UNTOUCHED.
-;
-; PARAMS-CONSUMED HANDSHAKE: After trigger, wait for SH2 to clear COMM0_LO=$00.
-;   The SH2 handler clears COMM0_LO immediately after reading all params from
-;   COMM2-6, before starting the pixel copy. This guarantees COMM2-6 are stable
-;   during the read — the 68K will not overwrite them on a re-entry.
-;
-; Master dispatch: polls COMM0_HI until non-zero, then reads COMM0_LO as index.
-;   COMM0_LO=$22 → SHLL2 → offset $88 into table at $06000780 → $06000808 = $023010F0.
-;
-; Size: 64 bytes code + 26 bytes NOP padding = 90 bytes ($00E35A-$00E3B3)
+; Each phase waits until the Master clears $A1512C.
 ; ============================================================================
 sh2_send_cmd:
-; --- WAIT: Previous command complete (SH2 clears COMM0_HI after copy + COMM cleanup) ---
 .wait_ready:
-        tst.b   COMM0_HI                        ; $00E35A: $4A39 $00A1 $5120 - Poll: SH2 done?
-        bne.s   .wait_ready                     ; $00E360: $66F8             - Loop until $00
-
-; --- WRITE PARAMS ---
-        move.l  a0,COMM3                        ; $00E362: $23C8 $00A1 $5126 - COMM3:4 = A0 src ptr
-        move.b  d1,COMM3_HI                     ; $00E368: $13C1 $00A1 $5126 - COMM3_HI = D1 (height)
-        move.l  a1,COMM5                        ; $00E36E: $23C9 $00A1 $512A - COMM5:6 = A1 dst ptr
-        move.w  d0,-(sp)                        ; $00E374: $3F00             - Save D0
-        lsr.w   #1,d0                           ; $00E376: $E248             - D0 >>= 1 (words/row)
-        move.b  d0,COMM2_LO                     ; $00E378: $13C0 $00A1 $5125 - COMM2_LO = D0/2
-        move.w  (sp)+,d0                        ; $00E37E: $301F             - Restore D0
-
-; --- TRIGGER: Dispatch index then trigger ---
-        move.b  #$22,COMM0_LO                   ; $00E380: $13FC $0022 $00A1 $5121 - LO=$22 (index)
-        move.b  #$01,COMM0_HI                   ; $00E388: $13FC $0001 $00A1 $5120 - HI=$01 (trigger)
-
-; --- WAIT: SH2 params-consumed handshake (COMM0_LO cleared by SH2 after reading params) ---
-.wait_consumed:
-        tst.b   COMM0_LO                        ; $00E390: $4A39 $00A1 $5121 - Poll: params read?
-        bne.s   .wait_consumed                  ; $00E396: $66F8             - Loop until $00
-        rts                                     ; $00E398: $4E75             - Return
-
-; --- NOP PADDING: 26 bytes to keep sh2_cmd_27 at $00E3B4 ---
-        dc.w    $4E71,$4E71,$4E71,$4E71         ; $00E39A: NOP×4
-        dc.w    $4E71,$4E71,$4E71,$4E71         ; $00E3A2: NOP×4
-        dc.w    $4E71,$4E71,$4E71,$4E71         ; $00E3AA: NOP×4
-        dc.w    $4E71                           ; $00E3B2: NOP×1
+        tst.b   COMM0_HI                        ; $00E35A: previous command done?
+        bne.s   .wait_ready
+        move.l  a1,($00A15128).l                ; $00E362: secondary pointer
+        move.w  #$0101,($00A1512C).l            ; $00E368: ready
+        move.b  #$22,COMM0_LO                   ; $00E370: command $22
+        move.b  #$01,COMM0_HI                   ; $00E378: trigger
+.wait_phase1:
+        tst.b   ($00A1512C).l                   ; $00E380: Master took it?
+        bne.s   .wait_phase1
+        move.w  d0,($00A15128).l                ; $00E388: D0
+        move.w  d1,($00A1512A).l                ; $00E38E: D1
+        move.w  #$0101,($00A1512C).l            ; $00E394: ready
+.wait_phase2:
+        tst.b   ($00A1512C).l                   ; $00E39C
+        bne.s   .wait_phase2
+        move.l  a0,($00A15128).l                ; $00E3A4: data pointer
+        move.w  #$0101,($00A1512C).l            ; $00E3AA: ready
+        rts                                     ; $00E3B2
 
 ; ============================================================================
-; sh2_cmd_27 ($00E3B4) - Command $27 via COMM Registers (21 calls/frame)
+; sh2_cmd_27 ($00E3B4) - Command $27 through the Master, original game code
 ; ============================================================================
-; Purpose: Passes cmd $27 parameters to Slave SH2 via COMM registers.
-;   Slave reads params from COMM2-6, processes pixels, clears COMM7.
-;   Bypasses Master SH2 entirely — no COMM0 dispatch overhead.
-; Called by: Menu highlights, HUD, sprite rendering (38 call sites)
+; Called by: menu highlights, HUD, sprite rendering (38 call sites)
 ; Parameters:
-;   A0 = Data pointer (SH2-space address, e.g. $04xxxxxx framebuffer)
-;   D0 = Width (bytes per row)
-;   D1 = Height (number of rows)
-;   D2 = Add value (constant added to each byte in region)
-; Clobbers: Nothing (no registers modified)
-;
-; Protocol: Wait COMM7==0 (Slave read previous params) → write COMM2-6 →
-;   write COMM7=$0027 (doorbell) → return immediately (fire-and-forget).
-;   Safe because Slave copies COMM2-6 to local regs before clearing COMM7.
-;
-; Slave drain at $020608 (inline SDRAM): reads COMM2-6, clears COMM7,
-;   applies cache-through ($04xx→$24xx), processes pixel region.
-; Size: 42 bytes code + 40 bytes NOP padding = 82 bytes ($E3B4-$E405)
+;   A0 = Data pointer
+;   D0 = Parameter 1, D1 = Parameter 2, D2 = Parameter 3
+; Clobbers: Nothing
+; Phase 1: pointer + command $27, wait. Phase 2: D0/D1, wait.
+; Phase 3: D2, return (the Master finishes on its own).
 ; ============================================================================
 sh2_cmd_27:
-; Wait for Slave to have read previous params (COMM7==0 means params copied)
-.wait_prev:
-        tst.w   COMM7                          ; $00E3B4: Slave read previous params?
-        bne.s   .wait_prev                     ; $00E3BA: No: spin until COMM7==0
-; Write parameters to COMM registers
-        move.l  a0,COMM4                       ; $00E3BC: data_ptr → COMM4+5
-        move.w  d0,COMM2                       ; $00E3C2: width → COMM2
-        move.w  d1,COMM3                       ; $00E3C8: height → COMM3
-        move.w  d2,COMM6                       ; $00E3CE: add_value → COMM6
-; Ring doorbell and return — Slave will process asynchronously
-        move.w  #$0027,COMM7                   ; $00E3D4: doorbell
-        rts                                    ; $00E3DC: fire-and-forget
-; Padding to maintain 82-byte function size ($E3B4-$E405)
-        dcb.w   20,$4E71                       ; 40 bytes NOP fill
+        move.l  a0,($00A15128).l                ; $00E3B4: pointer
+        move.w  #$0101,($00A1512C).l            ; $00E3BA: ready
+        move.b  #$27,COMM0_LO                   ; $00E3C2: command $27
+        move.b  #$01,COMM0_HI                   ; $00E3CA: trigger
+.cmd27_wait_phase1:
+        tst.b   ($00A1512C).l                   ; $00E3D2
+        bne.s   .cmd27_wait_phase1
+        move.w  d0,($00A15128).l                ; $00E3DA: D0
+        move.w  d1,($00A1512A).l                ; $00E3E0: D1
+        move.w  #$0101,($00A1512C).l            ; $00E3E6: ready
+.cmd27_wait_phase2:
+        tst.b   ($00A1512C).l                   ; $00E3EE
+        bne.s   .cmd27_wait_phase2
+        move.w  d2,($00A15128).l                ; $00E3F6: D2
+        move.w  #$0101,($00A1512C).l            ; $00E3FC: ready
+        rts                                     ; $00E404
 
 ; ============================================================================
 ; sh2_cmd_2F ($00E406) - Extended Command with 4 Parameters

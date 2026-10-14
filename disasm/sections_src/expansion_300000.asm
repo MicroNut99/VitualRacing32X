@@ -48,7 +48,7 @@
 ;   0x300C00-0x300FFF  queue_processor (1KB reserved)          — RESERVED (never activated)
 ;   --- Track 1 Phase 3 ---
 ;   0x301000-0x3010EF  general_queue_drain (240 bytes)         — DORMANT (Track 1 Phase 3, deactivated)
-;   0x3010F0-0x30119F  cmd22_single_shot (176 bytes)           — ACTIVE  (B-004, JT $020808)
+;   0x3010F0-0x30119F  cmd22_single_shot (176 bytes)           — unused since VR32X V7 (JT $020808 back to $06005198)
 ;   0x3011A0-0x3011DF  vis_bitmask_handler (64 bytes)          — DORMANT (S-1c reverted, JT restored)
 ;   0x3011E0-0x30123F  vertex_transform_optimized (96 bytes)  — ACTIVE  (S-6 Phase A, trampoline $0234C8)
 ;   0x301300-0x30148F  coord_transform_batched (388 bytes)   — ACTIVE  (S-6 Phase B, trampolines $02338A-$02349F)
@@ -332,7 +332,7 @@ general_queue_drain:
         include "sh2/generated/general_queue_drain.inc"
 
 ; ============================================================================
-; CMD22 SINGLE-SHOT HANDLER: 0x3010F0 — STATUS: ACTIVE (B-004, JT $020808)
+; CMD22 SINGLE-SHOT HANDLER: 0x3010F0 — STATUS: UNUSED since VR32X V7 (JT $020808 = $06005198 again)
 ; ============================================================================
 ; Inline COMM cleanup protocol (Phase 2 optimization):
 ;   Replaces hw_init_short JSR with inline byte/word-level COMM writes.
@@ -342,7 +342,7 @@ general_queue_drain:
 ;     other → restore COMM0_HI=$01, return to dispatch loop
 ;     $00 → truly idle, exit
 ;
-; Jump table entry at $020808 = $023010F0 (B-004, set in code_20200.asm).
+; Jump table entry at $020808 was $023010F0 (B-004); VR32X V7 restored $06005198.
 ;
 ; See: disasm/sh2/expansion/cmd22_single_shot.asm for source
 ;

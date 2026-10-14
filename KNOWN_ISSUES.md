@@ -497,6 +497,17 @@ When using `dcb.b (object_table_sprite_param_update+216-*),$FF` to compute paddi
 
 ### VirtuaRacing32X findings (October 2026, measured in PicoDrive with the pause menu's timing line and RAM dumps)
 
+- **Car select and menu fades at ~1/4 speed: fixed in V7.** Upstream's "M0/M0b remaining issue" above.
+  Cause: B-004 (single-shot cmd $22) and B-003 (async `sh2_cmd_27`, Slave doorbell COMM7) both write
+  their parameters to `$A15124-$A1512D`, with no lock between them. Reverting either one alone brings
+  the car select back to full speed; V7 restores both senders (`$E35A-$E405`) and the jump table entry
+  `$020808` (`$06005198`) to the original game code, byte for byte. Measured in PicoDrive: car select
+  redraws on 118 of 120 frames (original 118, before 32 = gaps of 6-7 frames); the stripe fades take as
+  long as in the original; the 1-player race is unchanged (a new picture every 3 frames).
+  `cmd22_single_shot` ($3010F0) and the Slave drain at `$020608` stay in the ROM, unused.
+  B-004 also wrote command data to COMM1 in some versions; the pause menu reads COMM1_LO bit 0
+  as "SH2 frame done", so the original protocol keeps that signal clean too.
+
 - **The dispatcher labels below are wrong.** While a 1-player race is driven, `$FF0002` = `$00884CBC`
   (`state_disp_004cb8`, the "pre-race" one below). `state_disp_005020` calls
   `gfx_2_player_entity_frame_orch`: it is the **2-player** race. So A-1 (40 FPS camera) only runs in
