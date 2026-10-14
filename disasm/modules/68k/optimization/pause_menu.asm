@@ -58,7 +58,12 @@ PM_BOX          equ     $0260           ; solid dark tile
 PM_ATTR         equ     $C000           ; priority + palette line 2
 PM_ATTR_SEL     equ     $E000           ; priority + palette line 3
 PM_ROWS         equ     $A000           ; plane A name table
-PM_TIMING_ROW   equ     4                       ; below the HUD, in the sky
+PM_FB             equ   $840000         ; 32X frame buffer as the 68000 sees it (FM = 0)
+PM_MARS_FBC       equ   $A1518B         ; frame buffer control, bit 0 = FS (shown)
+PM_FB_LINE        equ   210             ; timing line: the black strip under the 3D view
+PM_FB_CHARS       equ   20
+PM_FB_X           equ   (320-PM_FB_CHARS*8)/2
+pm_fbpend         equ   PM_BASE+$23     ; .b bit 0/1: frame buffer 0/1 still to get the text
 PM_MARS_MODE    equ     $A15181         ; 32X bitmap mode, bit 7 = PRI
 PM_MARS_ADAPT   equ     $A15100         ; adapter control, bit 7 = FM (1: SH2 owns the 32X VDP)
 
@@ -189,59 +194,124 @@ pm_race_handlers:
 pm_timing_update:
         tst.b   (pm_open).w
         bne.s   .done
-        bsr.s   pm_in_race
+        bsr     pm_in_race
         tst.b   d0
         beq.s   .not_race
         tst.b   (pm_timing).w
         beq.s   .off
         tst.b   (pm_dirty).w
-        beq.s   .done
+        beq.s   .flush
         clr.b   (pm_dirty).w
-        move    sr,-(sp)
-        move    #$2700,sr
-        bsr     pm_setup_gfx
-        bsr     pm_draw_timing
-        move    (sp)+,sr
+        lea     (pm_fps).w,a2                   ; new numbers: both buffers again
+        bsr     pm_build_numbers
+        move.b  #3,(pm_fbpend).w
         st      (pm_drawn).w
+        bra.s   .flush
+.off:   tst.b   (pm_drawn).w                    ; switched off: spaces over it, twice
+        beq.s   .flush
+        clr.b   (pm_drawn).w
+        bsr     pm_build_blank
+        move.b  #3,(pm_fbpend).w
+.flush: tst.b   (pm_fbpend).w
+        bne     pm_fb_flush
 .done:  rts
 .not_race:
-        clr.b   (pm_drawn).w                    ; the next race clears plane A
-        rts
-.off:   tst.b   (pm_drawn).w
-        beq.s   .done
         clr.b   (pm_drawn).w
-        move    sr,-(sp)
-        move    #$2700,sr
-        moveq   #PM_TIMING_ROW,d0
-        moveq   #0,d1
-        moveq   #40,d2
-        moveq   #0,d3
-        bsr     pm_fill
-        move    (sp)+,sr
+        clr.b   (pm_fbpend).w
         rts
 
-; "FPS 40  68K 48%  LAG 0" from the 3 words at (a2), at row d4, col 1
-pm_draw_timing:
-        lea     (pm_fps).w,a2
-        moveq   #PM_TIMING_ROW,d4
-        moveq   #1,d5
-pm_draw_numbers:
+; text into the 32X frame buffer the 68000 can reach (the one not shown),
+; when the SH2 has finished its frame; each buffer once per new text
+pm_fb_flush:
+        btst    #0,(PM_COMM1_LO).l              ; SH2 frame done: no SH2 frame
+        beq.s   .done                           ; buffer access now
+        move.b  (PM_MARS_FBC).l,d0              ; FS = buffer shown
+        andi.w  #1,d0
+        eori.w  #1,d0                           ; the 68000 reaches the other one
+        btst    d0,(pm_fbpend).w
+        beq.s   .done
+        bclr    d0,(pm_fbpend).w
+        move    sr,-(sp)
+        move    #$2700,sr
+        bclr    #7,(PM_MARS_ADAPT).l            ; FM = 0: 68000 owns the frame buffer
+        bsr.s   pm_fb_text
+        bset    #7,(PM_MARS_ADAPT).l            ; FM = 1
+        move    (sp)+,sr
+.done:  rts
+
+; the text at PM_BASE+$40 (PM_FB_CHARS characters) in white (32X colour 32)
+; on black (colour 1), lines PM_FB_LINE.., centred
+pm_fb_text:
+        lea     pm_font(pc),a3
+        moveq   #0,d7                           ; glyph row 0-7
+.row:   move.w  #PM_FB_LINE,d0
+        add.w   d7,d0
+        add.w   d0,d0
+        lea     (PM_FB).l,a1
+        moveq   #0,d1
+        move.w  (a1,d0.w),d1                    ; line table: line start in words
+        add.l   d1,d1
+        adda.l  d1,a1
+        adda.w  #PM_FB_X,a1
+        lea     (PM_BASE+$40).w,a0
+.ch:    moveq   #0,d2
+        move.b  (a0)+,d2
+        beq.s   .next
+        subi.w  #$20,d2
+        cmpi.w  #63,d2
+        bls.s   .ok
+        moveq   #0,d2
+.ok:    lsl.w   #3,d2
+        add.w   d7,d2
+        move.b  (a3,d2.w),d3                    ; this glyph row, MSB = left
+        moveq   #3,d4                           ; 4 pixel pairs
+.pair:  moveq   #1,d5
+        lsl.b   #1,d3
+        bcc.s   .l0
+        moveq   #32,d5
+.l0:    lsl.w   #8,d5
+        move.b  #1,d5
+        lsl.b   #1,d3
+        bcc.s   .r0
+        move.b  #32,d5
+.r0:    move.w  d5,(a1)+
+        dbra    d4,.pair
+        bra.s   .ch
+.next:  addq.w  #1,d7
+        cmpi.w  #8,d7
+        blo.s   .row
+        rts
+
+; "FPS 20 68K 48% LAG 0" from the 3 words at (a2), padded to PM_FB_CHARS
+pm_build_numbers:
         lea     (PM_BASE+$40).w,a0              ; build the text in RAM
         lea     pm_t_fps(pc),a1
         bsr.s   pm_cat
         move.w  (a2)+,d0
-        bsr.s   pm_num
+        bsr     pm_num
         lea     pm_t_cpu(pc),a1
         bsr.s   pm_cat
         move.w  (a2)+,d0
-        bsr.s   pm_num
+        bsr     pm_num
         lea     pm_t_lag(pc),a1
         bsr.s   pm_cat
         move.w  (a2)+,d0
-        bsr.s   pm_num
-        lea     pm_t_end(pc),a1                 ; spaces over longer old text
-        bsr.s   pm_cat
-        clr.b   (a0)
+        bsr     pm_num
+pm_pad: lea     (PM_BASE+$40+PM_FB_CHARS).w,a1
+.p:     cmpa.l  a1,a0
+        bhs.s   .e
+        move.b  #' ',(a0)+
+        bra.s   .p
+.e:     clr.b   (a0)
+        rts
+
+pm_build_blank:
+        lea     (PM_BASE+$40).w,a0
+        bra.s   pm_pad
+
+; the numbers in the pause menu (plane A), row d4, col d5
+pm_draw_numbers:
+        bsr.s   pm_build_numbers
         move.w  d4,d0
         move.w  d5,d1
         move.w  #PM_ATTR,d3
@@ -258,7 +328,6 @@ pm_cat: move.b  (a1)+,d0
 pm_t_fps:       dc.b    "FPS ",0
 pm_t_cpu:       dc.b    " 68K ",0
 pm_t_lag:       dc.b    "% LAG ",0
-pm_t_end:       dc.b    " ",0
         even
 
 ; decimal number d0.w (0-999) to (a0)+
@@ -419,7 +488,7 @@ pm_s_quit:      dc.b    "QUIT RACE",0
 pm_s_cam:       dc.b    "40 FPS CAMERA",0
 pm_s_timing:    dc.b    "TIMING",0
 pm_s_title:     dc.b    "PAUSED",0
-pm_s_ver:       dc.b    "VIRTUARACING32X V3",0
+pm_s_ver:       dc.b    "VIRTUARACING32X V4",0
 pm_s_help:      dc.b    "UP/DOWN  A/START OK",0
 pm_s_on:        dc.b    " ON",0
 pm_s_off:       dc.b    "OFF",0
