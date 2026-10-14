@@ -81,7 +81,7 @@ The 32X picture is switched off while the menu is up, so the menu is always read
 | QUIT RACE | the game's own quit (A+B+C): to the result screen |
 | TIMING | on: the numbers below are also shown live during the race, bottom middle, in the black strip under the 3D view. They are drawn into both 32X frame buffers once a second (the 68000 takes the frame buffer for a moment after the SH2 finished its frame), which costs about 1 lag frame a second |
 | `FPS 20 68K 48% LAG 0` | the last second before pausing: frames shown per second (32X frame-buffer swaps), 68000 busy time, frames where the 68000 was still busy at vblank |
-| `VR32X V9 10-13 22:13` | version and build time (month-day hour:minute, Pacific), written by the Makefile, so a screenshot shows which build ran |
+| `VR32X V9 10-13 22:12` | version and build time (month-day hour:minute, Pacific), written by the Makefile, so a screenshot shows which build ran |
 
 Up/Down choose, A, C or Start select, Left/Right also switch ON/OFF.
 
