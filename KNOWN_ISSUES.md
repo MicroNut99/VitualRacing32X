@@ -497,6 +497,14 @@ When using `dcb.b (object_table_sprite_param_update+216-*),$FF` to compute paddi
 
 ### VirtuaRacing32X findings (October 2026, measured in PicoDrive with the pause menu's timing line and RAM dumps)
 
+- **SH2 profiles from PicoDrive overstate cartridge ROM reads.** In a 1P race the slave spends
+  ~170K cycles per render (25% of its busy time) on one instruction, `MOV.W @R13+,R1` at
+  `$C00001CE` (on-chip pipeline), with R13 in cache-through ROM ($22xxxxxx): ~170 cycles per
+  execution. Reading the same data through the cache ($02xxxxxx, test stub) changed nothing in
+  PicoDrive, so the cost is the emulator's ROM timing model, not a measured hardware fact. Renderer
+  optimisation decisions need numbers from a real 32X: V11's timing line shows when the SH2
+  reports its frame done ("SH2 nn%" of the 3-frame window).
+
 - **V9: real-hardware hang after the Sega Sports logo (V3-V8), fixed.** The pause menu's V-INT hook
   read the 32X frame buffer control register ($A1518B) every frame while FM = 1. A 68000 access to
   the 32X VDP registers with FM = 1 waits until FM = 0 (hardware manual, "VDP Access Competition");

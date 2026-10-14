@@ -40,9 +40,14 @@ pm_lag          equ     PM_BASE+$0E     ; .w V-INTs this second with the 68K bus
 pm_busy         equ     PM_BASE+$10     ; .l 68K busy lines this second
 pm_abs          equ     PM_BASE+$14     ; .l all V-INTs since start
 pm_t_wake       equ     PM_BASE+$18     ; .l line time when the 68K woke up
-pm_fps          equ     PM_BASE+$1C     ; .w shown: swaps per second
-pm_cpu          equ     PM_BASE+$1E     ; .w shown: 68K busy, percent
-pm_lagshow      equ     PM_BASE+$20     ; .w shown: lag frames per second
+pm_fps          equ     PM_BASE+$30     ; .w shown: swaps per second
+pm_cpu          equ     PM_BASE+$32     ; .w shown: 68K busy, percent
+pm_sh2show      equ     PM_BASE+$34     ; .w shown: SH2 frame done, percent of 3 frames
+pm_lagshow      equ     PM_BASE+$36     ; .w shown: lag frames per second
+pm_t_swap       equ     PM_BASE+$24     ; .l line time of the last frame-buffer swap
+pm_sh2max       equ     PM_BASE+$28     ; .w lines from the swap to "SH2 frame done", worst this second
+pm_seen         equ     PM_BASE+$2A     ; .b "SH2 frame done" already timed since the swap
+PM_RAMWAIT      equ     PM_BASE+$C0     ; the wait loop, copied to work RAM (no ROM bus use)
 
 PM_VDP_DATA        equ     $C00000
 PM_VDP_CTRL        equ     $C00004
@@ -58,18 +63,18 @@ PM_ROWS         equ     $A000           ; plane A name table
 PM_FB             equ   $840000         ; 32X frame buffer as the 68000 sees it (FM = 0)
 PM_MARS_FBC       equ   $A1518B         ; frame buffer control, bit 0 = FS (shown)
 PM_FB_LINE        equ   210             ; timing line: the black strip under the 3D view
-PM_FB_CHARS       equ   20
+PM_FB_CHARS       equ   30
 PM_FB_X           equ   (320-PM_FB_CHARS*8)/2
 pm_fbpend         equ   PM_BASE+$23     ; .b bit 0/1: frame buffer 0/1 still to get the text
-pm_fblast         equ   PM_BASE+$60     ; 2 x 24 bytes: the text each frame buffer shows now
+pm_fblast         equ   PM_BASE+$60     ; 2 x 32 bytes: the text each frame buffer shows now
                                         ; ($FF = unknown: draw that character again)
 pm_fbrows         equ   PM_BASE+$A0     ; 8 longs: where the text's 8 lines start
 PM_MARS_MODE    equ     $A15181         ; 32X bitmap mode, bit 7 = PRI
 PM_MARS_ADAPT   equ     $A15100         ; adapter control, bit 7 = FM (1: SH2 owns the 32X VDP)
 
 PM_MENU_ROW     equ     7
-PM_MENU_COL     equ     9
-PM_MENU_W       equ     22
+PM_MENU_COL     equ     4
+PM_MENU_W       equ     32
 PM_MENU_H       equ     12
 PM_ITEMS        equ     4
 
@@ -90,6 +95,13 @@ pm_init:
 .clr:   clr.l   (a0)+
         dbra    d0,.clr
         move.w  #$B532,(pm_magic).l
+        movem.l a1,-(sp)
+        lea     pm_rw(pc),a0                    ; the wait loop into work RAM
+        lea     (PM_RAMWAIT).l,a1
+        moveq   #(pm_rw_end-pm_rw)/2-1,d0
+.cp:    move.w  (a0)+,(a1)+
+        dbra    d0,.cp
+        movem.l (sp)+,a1
         movem.l (sp)+,d0/a0
 .done:  rts
 
@@ -113,6 +125,9 @@ pm_vint:
         beq.s   .same
         move.b  d0,(pm_fs_last).l
         addq.w  #1,(pm_swaps).l
+        bsr     pm_line_time
+        move.l  d0,(pm_t_swap).l
+        clr.b   (pm_seen).l
 .same:
         cmpi.w  #60,(pm_ticks).l                ; one second
         blo.s   .out
@@ -125,6 +140,12 @@ pm_vint:
         bls.s   .pct
         moveq   #100,d0
 .pct:   move.w  d0,(pm_cpu).l
+        moveq   #0,d0                           ; SH2: worst lines swap -> done
+        move.w  (pm_sh2max).l,d0                ; * 100 / (3 * 262)
+        mulu.w  #100,d0
+        divu.w  #3*262,d0
+        move.w  d0,(pm_sh2show).l
+        clr.w   (pm_sh2max).l
         clr.w   (pm_swaps).l
         clr.w   (pm_ticks).l
         clr.w   (pm_lag).l
@@ -163,15 +184,51 @@ pm_loop_wait:
         add.l   d0,(pm_busy).l
 .nocount:
         bsr     pm_timing_update
+        tst.b   (pm_drawn).l                    ; timing line on in a race: wait in
+        beq.s   .stop                           ; work RAM and time "SH2 frame done"
+        jsr     (PM_RAMWAIT).l
         movem.l (sp)+,d0-d7/a0-a2
+        bra.s   .woke
+.stop:  movem.l (sp)+,d0-d7/a0-a2
 .wait:  stop    #$2300
         tst.w   ($FFFFC87A).w
         bne.s   .wait
-        movem.l d0-d1,-(sp)
+.woke:  movem.l d0-d1,-(sp)
         bsr.s   pm_line_time
         move.l  d0,(pm_t_wake).l
         movem.l (sp)+,d0-d1
         rts
+
+; the wait loop, run from work RAM at PM_RAMWAIT: polls the V-INT flag and
+; COMM1_LO bit 0 ("SH2 frame done", read twice) without touching the cartridge
+; bus the SH2s fetch their model data on. Position independent.
+pm_rw:  move    #$2300,sr
+.l:     tst.w   ($FFFFC87A).w                   ; V-INT done: back to the game
+        beq.s   .x
+        tst.b   (pm_seen).l
+        bne.s   .l
+        move.b  (PM_COMM1_LO).l,d0
+        cmp.b   (PM_COMM1_LO).l,d0
+        bne.s   .l
+        btst    #0,d0
+        beq.s   .l
+        jsr     ($00880000+pm_sh2_record).l
+        bra.s   .l
+.x:     rts
+pm_rw_end:
+
+; lines from the last swap to "SH2 frame done", worst of the second
+pm_sh2_record:
+        st      (pm_seen).l
+        bsr     pm_line_time
+        sub.l   (pm_t_swap).l,d0
+        bmi.s   .x
+        cmpi.l  #3*262,d0
+        bhi.s   .x
+        cmp.w   (pm_sh2max).l,d0
+        bls.s   .x
+        move.w  d0,(pm_sh2max).l
+.x:     rts
 
 ; racing: main loop handler is one of the race dispatchers
 pm_in_race:
@@ -252,7 +309,7 @@ pm_fb_text:
         lea     (pm_fblast).l,a4
         tst.w   d0
         beq.s   .b0
-        lea     24(a4),a4
+        lea     32(a4),a4
 .b0:    lea     (PM_FB).l,a1                    ; the 8 line starts
         lea     (pm_fbrows).l,a2
         move.w  #PM_FB_LINE*2,d0
@@ -309,13 +366,13 @@ pm_nib: dc.l    $01010101,$01010120,$01012001,$01012020,$01200101,$01200120,$012
 pm_fb_forget:
         movem.l d0/a0,-(sp)
         lea     (pm_fblast).l,a0
-        moveq   #48/4-1,d0
+        moveq   #64/4-1,d0
 .f:     move.l  #$FFFFFFFF,(a0)+
         dbra    d0,.f
         movem.l (sp)+,d0/a0
         rts
 
-; "FPS 20 68K 48% LAG 0" from the 3 words at (a2), padded to PM_FB_CHARS
+; "FPS 20 68K 48% SH2 52% LAG 0" from the 4 words at (a2), padded to PM_FB_CHARS
 pm_build_numbers:
         lea     (PM_BASE+$40).l,a0              ; build the text in RAM
         lea     pm_t_fps(pc),a1
@@ -323,6 +380,10 @@ pm_build_numbers:
         move.w  (a2)+,d0
         bsr     pm_num
         lea     pm_t_cpu(pc),a1
+        bsr.s   pm_cat
+        move.w  (a2)+,d0
+        bsr     pm_num
+        lea     pm_t_sh2(pc),a1
         bsr.s   pm_cat
         move.w  (a2)+,d0
         bsr     pm_num
@@ -360,6 +421,7 @@ pm_cat: move.b  (a1)+,d0
 
 pm_t_fps:       dc.b    "FPS ",0
 pm_t_cpu:       dc.b    " 68K ",0
+pm_t_sh2:       dc.b    "% SH2 ",0
 pm_t_lag:       dc.b    "% LAG ",0
         even
 
@@ -581,7 +643,7 @@ pm_draw_menu:
         tst.b   (pm_timing).l
         bne.s   .sw
         lea     pm_s_off(pc),a0
-.sw:    moveq   #PM_MENU_COL+18,d1
+.sw:    moveq   #PM_MENU_COL+28,d1
         bsr     pm_text
 .next:  addq.w  #1,d4
         cmpi.w  #PM_ITEMS,d4
@@ -648,7 +710,7 @@ pm_pause_tick:
         st      (pm_open).l
         clr.b   (pm_sel).l
         move.l  (pm_fps).l,(PM_BASE+$38).l     ; the numbers from just before pausing
-        move.w  (pm_lagshow).l,(PM_BASE+$3C).l
+        move.l  (pm_sh2show).l,(PM_BASE+$3C).l
         moveq   #0,d0                           ; 32X picture off while the menu is up
         bsr     pm_set_mode                     ; (its sky and some 3D colours always
                                                 ; show in front of the Genesis planes)
