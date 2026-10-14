@@ -50,7 +50,22 @@ Tested in PicoDrive. Fusion and real hardware: not yet.
   new picture only every 6-7 frames and the stripe fades between menus took about 4 times longer.
   Both senders and the jump table entry are back to the original game code. See KNOWN_ISSUES.md.
 
-## Pause menu (V3-V7)
+- **V8: the game plays exactly like the original again.** Every byte upstream changed in the original
+  game area was checked against the original ROM. Fixed:
+  - 10 calls in the race code (`race_frame_update`, `race_state_read_sound_trigger`,
+    `scene_dispatch_input_replay`) went to the wrong function or into a data table after
+    upstream renamed functions; they call the original targets again.
+  - `speed_interpolation`: upstream's "divide by 103" shortcut was 1.2% off; the exact divide is back.
+  - `depth_sort`: upstream's faster sort dropped the tie-break the race positions use; original back.
+  - 2-player races showed a black screen (upstream's 40 FPS camera); original back, menu switch removed.
+  - 2-player races drew player 2's view wrong (upstream's S-6 Phase B SH2 transform); original back.
+  - Command $25 is back to the original handshake, like $22 and $27 in V7.
+  Tested in PicoDrive with the same pad input as the original ROM: attract demo (6,000 frames),
+  1-player race (4,000 frames) and 2-player race (2,300 frames) are pixel-identical to the original.
+  Upstream changes that still differ give identical pictures: the S-1 sprite update, S-6 Phase A
+  vertex transform, the STOP in `wait_for_vblank`, the Slave idle check.
+
+## Pause menu (V3-V8)
 
 Start during a 1-player race opens the menu (2-player races keep the game's own pause).
 The 32X picture is switched off while the menu is up, so the menu is always readable.
@@ -60,10 +75,9 @@ The 32X picture is switched off while the menu is up, so the menu is always read
 | CONTINUE | back to the race (the game's own unpause) |
 | RETRY COURSE | back to the course select with the same car and course; Start races again |
 | QUIT RACE | the game's own quit (A+B+C): to the result screen |
-| 2P 40 FPS CAM | upstream's camera interpolation on/off. It only runs in 2-player races (dispatcher `$005020`); the 1-player race is 20 fps either way (see KNOWN_ISSUES.md) |
 | TIMING | on: the numbers below are also shown live during the race, bottom middle, in the black strip under the 3D view. They are drawn into both 32X frame buffers once a second (the 68000 takes the frame buffer for a moment after the SH2 finished its frame), which costs about 1 lag frame a second |
 | `FPS 20 68K 48% LAG 0` | the last second before pausing: frames shown per second (32X frame-buffer swaps), 68000 busy time, frames where the 68000 was still busy at vblank |
-| `VR32X V7 10-13 21:40` | version and build time (month-day hour:minute, Pacific), written by the Makefile, so a screenshot shows which build ran |
+| `VR32X V8 10-13 22:30` | version and build time (month-day hour:minute, Pacific), written by the Makefile, so a screenshot shows which build ran |
 
 Up/Down choose, A, C or Start select, Left/Right also switch ON/OFF.
 

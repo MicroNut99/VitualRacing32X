@@ -59,7 +59,7 @@ race_state_read_sound_trigger:
         move.w  d1,$0014(a0)                    ; set effect_duration
         move.w  ($FFFFC09A).w,($FFFFC07A).w     ; copy camera state
 ; --- call speed calc + race state read ---
-        jsr     object_movement_velocity_calc(pc) ; $4EBA $00CC
+        jsr     object_movement_velocity_calc+6(pc) ; $4EBA $00CC → $007EB8 (VR32X V8: was +0)
         tst.b   ($FFFFC826).w                   ; sound enabled?
         beq.s   .done
         cmpi.w  #$000F,$008A(a0)                ; param_8a >= 15?

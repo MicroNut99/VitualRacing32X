@@ -52,8 +52,8 @@ scene_dispatch_input_replay:
         movea.l $00C52C(pc,d0.w),a1             ; load handler address
         jsr     (a1)                            ; call state handler
 ; --- post-dispatch calls ---
-        jsr     display_list_builder(pc) ; $4EBA $FB52
-        jsr     animated_seq_player(pc) ; $4EBA $F1B8
+        jsr     display_list_builder+$14(pc) ; $4EBA $FB52 → $00C070 (VR32X V8: was +0, a data table)
+        jsr     animated_seq_player+$A(pc) ; $4EBA $F1B8 → $00B6DA (VR32X V8: was +0, a data table)
         jsr     object_update(pc)       ; $4EBA $F15E
         jmp     scene_state_disp_race_init_phases(pc) ; $4EFA $0138
 ; --- jump table (4 entries) ---

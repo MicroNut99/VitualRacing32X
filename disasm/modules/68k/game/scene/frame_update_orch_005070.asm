@@ -32,5 +32,6 @@ frame_update_orch_005070:
         jsr     ai_buffer_setup+14(pc)  ; $4EBA $60A2
         jsr     ai_buffer_setup+28(pc)  ; $4EBA $60AC
         jsr     entity_render_pipeline_with_vdp_dma_2p_copy+462(pc); $4EBA $1380
-        jmp     state4_epilogue(pc)            ; tail-jump: interp + state advance
-        dcb.b   10,$FF                         ; padding to maintain 46-byte function size
+        addq.w  #4,($FFFFC87E).w                ; $005090  advance state (VR32X V8: original again,
+        move.w  #$001C,$00FF0008                ; $005094  V-INT state; upstream tail-jumped to
+        rts                                     ; $00509C  state4_epilogue for its 2P 40 FPS camera)

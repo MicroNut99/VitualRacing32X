@@ -117,6 +117,6 @@ vdp_wait_test:                   ; $02050C
         dc.w    $0600        ; $020808  cmd $22 → $06005198, the original handler (VR32X V7)
         dc.w    $5198        ; $02080A
         ROMDATA $02080C,$020814
-        dc.w    $0230        ; $020814  cmd $25 → expansion ROM $02300500 (B-005)
-        dc.w    $0500        ; $020816
+        dc.w    $0600        ; $020814  cmd $25 → $06005024, the original handler (VR32X V8)
+        dc.w    $5024        ; $020816
         ROMDATA $020818,$022200

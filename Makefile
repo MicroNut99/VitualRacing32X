@@ -20,7 +20,7 @@ ORIGINAL_ROM ?= roms/Virtua Racing Deluxe (USA).32x
 ROM_MD5 = 72b1ad0f949f68da7d0a6339ecd51a3f
 SECTIONS_STAMP = disasm/sections/.stamp
 OUTPUT_ROM = $(BUILD_DIR)/vr_rebuild.32x
-VR_VERSION = V7
+VR_VERSION = V8
 
 # Assembly flags
 # -Fbin = binary output

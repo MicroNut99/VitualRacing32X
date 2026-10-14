@@ -40,7 +40,7 @@
 ;   0x300280-0x3002AB  slave_test_func (32 bytes)              — DORMANT (B-006 reverted)
 ;   0x300300-0x300325  vertex_transform_original_relocated      — DORMANT (B-006 reverted)
 ;   0x300400-0x300450  shadow_path_wrapper (~80 bytes)         — DORMANT (B-006 reverted)
-;   0x300500-0x300537  cmd25_single_shot (~56 bytes)           — ACTIVE  (B-005, JT $020814)
+;   0x300500-0x300537  cmd25_single_shot (~56 bytes)           — unused since VR32X V8 (JT $020814 back to $06005024)
 ;   0x300600-0x30067F  cmd27_queue_drain (128 bytes)           — DORMANT (superseded by inline drain at $020608)
 ;   0x300700-0x30073F  slave_comm7_idle_check (64 bytes)       — ACTIVE  (B-003, trampoline $020608)
 ;   --- Phase 1 allocations ---
@@ -51,7 +51,7 @@
 ;   0x3010F0-0x30119F  cmd22_single_shot (176 bytes)           — unused since VR32X V7 (JT $020808 back to $06005198)
 ;   0x3011A0-0x3011DF  vis_bitmask_handler (64 bytes)          — DORMANT (S-1c reverted, JT restored)
 ;   0x3011E0-0x30123F  vertex_transform_optimized (96 bytes)  — ACTIVE  (S-6 Phase A, trampoline $0234C8)
-;   0x301300-0x30148F  coord_transform_batched (388 bytes)   — ACTIVE  (S-6 Phase B, trampolines $02338A-$02349F)
+;   0x301300-0x30148F  coord_transform_batched (388 bytes)   — unused since VR32X V8 (wrong second view in 2-player races)
 ;   0x301490-0x3FFFFF  Free space (remaining ~1018KB)
 ;
 ; Shared Data Structures (cache-through SDRAM, NOT in expansion ROM):
@@ -228,7 +228,7 @@ shadow_path_wrapper:
         include "sh2/generated/shadow_path_wrapper.inc"
 
 ; ============================================================================
-; CMD25 SINGLE-SHOT HANDLER: 0x300500 — STATUS: ACTIVE (B-005, JT $020814)
+; CMD25 SINGLE-SHOT HANDLER: 0x300500 — STATUS: UNUSED since VR32X V8 (JT $020814 = $06005024 again)
 ; ============================================================================
 ; B-005: Single-shot decompression handler for cmd $25.
 ; Replaces the 3-phase COMM6 handshake protocol with single-shot dispatch.
@@ -380,7 +380,7 @@ vertex_transform_opt:
         include "sh2/generated/vertex_transform_optimized.inc"
 
 ; ============================================================================
-; COORD_TRANSFORM BATCHED: 0x301300 — STATUS: ACTIVE (S-6, Phase B)
+; COORD_TRANSFORM BATCHED: 0x301300 — STATUS: UNUSED since VR32X V8 (original quad_helper/quad_batch code restored)
 ; ============================================================================
 ; Relocated state machine (func_017-019) with coord_transform inlined at all
 ; 3 BSR sites. External BSR to func_020 ($0234A0) replaced with MOV.L+JSR.

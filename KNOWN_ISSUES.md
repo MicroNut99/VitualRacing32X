@@ -497,6 +497,33 @@ When using `dcb.b (object_table_sprite_param_update+216-*),$FF` to compute paddi
 
 ### VirtuaRacing32X findings (October 2026, measured in PicoDrive with the pause menu's timing line and RAM dumps)
 
+- **V8 audit: every upstream change in the original game area checked against the original ROM.**
+  Method: list every byte range where the build differs from the original in `$000000-$2FFFFF`,
+  then run the original and the build in PicoDrive with the same scripted pad input and compare
+  every 10th-20th frame pixel for pixel. Restored to the original (byte-identical):
+  - `race_frame_update` ($6A52-$6A80), `race_state_read_sound_trigger` ($7DEA),
+    `scene_dispatch_input_replay` ($C51C, $C520): 10 `jsr label(pc)` went to the wrong address after
+    the function renames (e.g. `tire_screech_sound_trigger_053` $7C56 instead of `multi_flag_test`
+    $7CD8; `display_list_builder` and `animated_seq_player` resolved to data tables before the code).
+    Rule: a `jsr label(pc)` whose comment keeps the original `$4EBA $xxxx` must assemble to that
+    displacement; a renamed or split module can silently move the target.
+  - `speed_interpolation` ($A3FE): `muls #644 / swap` for "/103" is 1.2% off and rounds negatives
+    differently; `ext.l / divs #103` again.
+  - `depth_sort` ($9DD6): the insertion sort (QW-4a) dropped the track-position tie-break used by
+    `race_pos_sorting_and_rank_assignment`; the original bubble sort again.
+  - 2-player 40 FPS camera (A-1: `$5042` jsr `camera_snapshot_wrapper`, `$5090` jmp
+    `state4_epilogue`): the 2-player race stayed black after the course select (also in upstream
+    HEAD). Original code again; the pause menu switch is gone.
+  - S-6 Phase B (`quad_helper`, `quad_batch_short`, `quad_batch_alt_short` trampolines to
+    `coord_transform_batched` $301300): player 2's view in 2-player races was drawn from a wrong
+    camera. Original SH2 code again (sources from upstream 34709a1).
+  - cmd $25 sender (B-005, $E316) and jump table $020814: original handshake again.
+  Still different from the original, pixel-identical in every test: S-1 sprite update relocation
+  ($36DE), S-6 Phase A `vertex_transform_optimized` ($0234C8), STOP + $C87A check in
+  `wait_for_vblank`, the Slave COMM7 idle check ($020608, never triggered now).
+  Seen in testing: the original ROM itself froze in PicoDrive after ~96 s of one scripted race
+  (picture stopped, frame 5760); the build ran on. Not investigated further.
+
 - **Car select and menu fades at ~1/4 speed: fixed in V7.** Upstream's "M0/M0b remaining issue" above.
   Cause: B-004 (single-shot cmd $22) and B-003 (async `sh2_cmd_27`, Slave doorbell COMM7) both write
   their parameters to `$A15124-$A1512D`, with no lock between them. Reverting either one alone brings

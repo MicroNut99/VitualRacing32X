@@ -13,7 +13,6 @@
 ;   - pause sub-state table ($0057A4): entry [08] -> pm_pause_tick (the menu),
 ;     entry [10] -> pm_quit_stage (QUIT or RESTART after the game's own
 ;     quit teardown)
-;   - state4_epilogue (code_2200): "40 FPS CAMERA OFF" skips the interpolation
 ;
 ; Drawing: plane A (name table $A000, 128 cells wide), unused in 1-player
 ; races. Font: 64 tiles at VRAM $4400 (tile $220), in the free VRAM after
@@ -31,7 +30,6 @@ pm_magic        equ     PM_BASE+$00     ; .w $B532 once initialised
 pm_open         equ     PM_BASE+$02     ; .b menu on screen
 pm_sel          equ     PM_BASE+$03     ; .b selected line
 pm_restart      equ     PM_BASE+$04     ; .b 1: the quit sequence restarts the race
-pm_interp_off   equ     PM_BASE+$05     ; .b 1: 40 FPS camera off (original 20)
 pm_timing       equ     PM_BASE+$06     ; .b 1: timing line on
 pm_dirty        equ     PM_BASE+$07     ; .b new numbers to draw
 pm_fs_last      equ     PM_BASE+$08     ; .b last frame-buffer select bit seen
@@ -70,8 +68,8 @@ PM_MARS_ADAPT   equ     $A15100         ; adapter control, bit 7 = FM (1: SH2 ow
 PM_MENU_ROW     equ     7
 PM_MENU_COL     equ     9
 PM_MENU_W       equ     22
-PM_MENU_H       equ     13
-PM_ITEMS        equ     5
+PM_MENU_H       equ     12
+PM_ITEMS        equ     4
 
 ; VRAM write address command for VRAM address \1 into d7
 pm_vram_cmd     macro
@@ -492,11 +490,10 @@ pm_set_mode:
 ; ----------------------------------------------------------------------------
 pm_items:
         dc.l    pm_s_cont+$880000, pm_s_restart+$880000, pm_s_quit+$880000
-        dc.l    pm_s_cam+$880000, pm_s_timing+$880000
+        dc.l    pm_s_timing+$880000
 pm_s_cont:      dc.b    "CONTINUE",0
 pm_s_restart:   dc.b    "RETRY COURSE",0
 pm_s_quit:      dc.b    "QUIT RACE",0
-pm_s_cam:       dc.b    "2P 40 FPS CAM",0
 pm_s_timing:    dc.b    "TIMING",0
 pm_s_title:     dc.b    "PAUSED",0
 pm_s_ver:       include "../build/pm_stamp.inc"   ; "VR32X V6 mm-dd hh:mm", made by the Makefile
@@ -543,16 +540,10 @@ pm_draw_menu:
         moveq   #PM_MENU_COL+3,d1
         bsr     pm_text
         movem.l (sp)+,d0/d3-d4
-        cmpi.w  #3,d4                           ; switches: ON / OFF
-        blo.s   .next
+        cmpi.w  #3,d4                           ; TIMING: ON / OFF
+        bne.s   .next
         lea     pm_s_on(pc),a0
-        cmpi.w  #3,d4
-        bne.s   .tim
-        tst.b   (pm_interp_off).l
-        beq.s   .sw
-        lea     pm_s_off(pc),a0
-        bra.s   .sw
-.tim:   tst.b   (pm_timing).l
+        tst.b   (pm_timing).l
         bne.s   .sw
         lea     pm_s_off(pc),a0
 .sw:    moveq   #PM_MENU_COL+18,d1
@@ -561,16 +552,16 @@ pm_draw_menu:
         cmpi.w  #PM_ITEMS,d4
         blo     .i
         lea     (PM_BASE+$38).l,a2              ; racing numbers from before the pause
-        moveq   #PM_MENU_ROW+9,d4
+        moveq   #PM_MENU_ROW+8,d4
         moveq   #PM_MENU_COL+1,d5
         bsr     pm_draw_numbers
         lea     pm_s_ver(pc),a0
-        moveq   #PM_MENU_ROW+10,d0
+        moveq   #PM_MENU_ROW+9,d0
         moveq   #PM_MENU_COL+1,d1
         move.w  #PM_ATTR,d3
         bsr     pm_text
         lea     pm_s_help(pc),a0
-        moveq   #PM_MENU_ROW+11,d0
+        moveq   #PM_MENU_ROW+10,d0
         moveq   #PM_MENU_COL+1,d1
         move.w  #PM_ATTR,d3
         bra     pm_text
@@ -648,8 +639,6 @@ pm_pause_tick:
         moveq   #0,d5
         move.b  (pm_sel).l,d5
         cmpi.b  #3,d5
-        beq.s   .cam
-        cmpi.b  #4,d5
         beq.s   .tim
         andi.b  #$E0,d0                         ; actions: Start, A or C only
         beq.s   .none
@@ -663,8 +652,6 @@ pm_pause_tick:
         bne.s   .none
         st      (pm_restart).l
         rts
-.cam:   not.b   (pm_interp_off).l
-        bra     pm_draw_menu
 .tim:   not.b   (pm_timing).l
         bra     pm_draw_menu
 .none:  rts

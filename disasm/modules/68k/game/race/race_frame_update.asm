@@ -38,18 +38,18 @@ race_frame_update:
         move.w  d0,$0046(a0)                    ; clear display_scale
         move.w  d0,$004A(a0)                    ; clear object field +$4A
 ; --- 12 physics/update subroutine calls ---
-        jsr     triple_guard_set_state_to_be(pc) ; $4EBA $1678
+        jsr     field_check_guard(pc)    ; $4EBA $1678 → $0080CC (VR32X V8: was triple_guard_set_state_to_be, $0080AE)
         jsr     timer_decrement_multi(pc)         ; jsr $008548(pc)
         jsr     suspension_steering_damping(pc)  ; jsr $009802(pc)
-        jsr     object_anim_timer_speed_clear(pc) ; $4EBA $141A
+        jsr     object_anim_timer_speed_clear+6(pc) ; $4EBA $141A → $007E7A (VR32X V8: was +0)
         jsr     entity_pos_update(pc)   ; $4EBA $0534
-        jsr     tire_screech_sound_trigger_053(pc) ; $4EBA $1270
+        jsr     multi_flag_test(pc)      ; $4EBA $1270 → $007CD8 (VR32X V8: was tire_screech_sound_trigger_053, $007C56)
         jsr     angle_to_sine(pc)       ; $4EBA $063E
         jsr     object_link_copy_table_lookup(pc) ; $4EBA $06DA
-        jsr     calculate_object_heading_composite(pc) ; $4EBA $0BDA
-        jsr     object_heading_deviation_check_warning_flag(pc) ; $4EBA $14D8
+        jsr     rotational_offset_calc(pc) ; $4EBA $0BDA → $00764E (VR32X V8: was calculate_object_heading_composite, $007636)
+        jsr     position_threshold_check(pc) ; $4EBA $14D8 → $007F50 (VR32X V8: was object_heading_deviation_check_warning_flag, $007EFC)
         jsr     effect_countdown(pc)    ; $4EBA $41C2
-        jsr     speed_modifier(pc)      ; $4EBA $30D4
+        jsr     set_camera_regs_to_invalid(pc) ; $4EBA $30D4 → $009B54 (VR32X V8: was speed_modifier, $009B32)
 ; --- state dispatch via external jump table ---
         move.w  ($FFFFC8A0).w,d0                ; race_state (table index)
         movea.l $006AB4(pc,d0.w),a1             ; load handler from table at $006AB4
