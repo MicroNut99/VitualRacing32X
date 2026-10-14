@@ -1,0 +1,176 @@
+; ============================================================================
+; vdp_display_init — VDP Display Initialization
+; ROM Range: $000DD2-$000FEA (536 bytes)
+; ============================================================================
+; VDP display initialization and main dispatch loop setup:
+;   1. Requests Z80 bus, configures display mode ($8C00) and scroll ($9010)
+;   2. DMA fill sprite attribute table: 128 entries at VRAM $0000
+;      (regs $9380/$9403/$9500/$9688/$977F, cmd $4000/$0083)
+;   3. DMA fill scroll/nametable: 64x14 entries at VRAM $C000
+;      (regs $9340/$9400/$9540/$96C2/$977F, cmd $C000/$0080)
+;   4. Configures rendering flags and palette transfer
+;   5. Polls completion via subroutine loop
+;   6. Resets Z80 with halt program, silences PSG (4 channels)
+;   7. Calls z80_bus_vdp_init for final VDP/sound setup
+;   8. Fills CRAM with initial palette (64 entries of color $0E)
+;   9. Copies one of two dispatch loop variants to RAM ($FF0000):
+;      - $000F92: Normal dispatch (game_tick + STOP until V-INT)
+;      - $000FAA: Alternate dispatch (alternate_tick + flag sync)
+;
+; SELF-MODIFYING CODE: $FF0008 is the immediate operand of the MOVE.W
+; at $FF0006. Game handlers write to $FF0008 to select V-INT dispatch
+; state (e.g., $0004=common, $0018=fb_toggle, $0054=race render).
+; The MOVE.W position at $FF0006 must NOT be moved.
+;
+; Uses: D0, D1, D4, D6, D7, A0, A1, A5
+; RAM:
+;   $C87A: vint_dispatch_state
+; Calls:
+;   $000FEA: z80_bus_vdp_init
+; ============================================================================
+
+vdp_display_init:
+        MOVEQ   #$04,D0                         ; $000DD2
+        JSR     $008814BE                       ; $000DD4
+        MOVEQ   #$0A,D1                         ; $000DDA
+        JSR     $0088155E                       ; $000DDC
+        MOVE.W  #$0100,Z80_BUSREQ                ; $000DE2
+.wait_z80_bus_1:
+        BTST    #0,Z80_BUSREQ                    ; $000DEA
+        BNE.S  .wait_z80_bus_1                        ; $000DF2
+        MOVE.W  #$8C00,(A5)                     ; $000DF4
+        MOVE.W  #$9010,(A5)                     ; $000DF8
+        MOVE.W  (-14220).W,D4                   ; $000DFC
+        BSET    #4,D4                           ; $000E00
+        MOVE.W  D4,(A5)                         ; $000E04
+        MOVE.L  #$93809403,(A5)                 ; $000E06
+        MOVE.L  #$95009688,(A5)                 ; $000E0C
+        MOVE.W  #$977F,(A5)                     ; $000E12
+        MOVE.W  #$4000,(A5)                     ; $000E16
+        MOVE.W  #$0083,(-14218).W               ; $000E1A
+        MOVE.W  (-14218).W,(A5)                 ; $000E20
+        MOVE.W  (-14220).W,(A5)                 ; $000E24
+        MOVE.W  (-14220).W,D4                   ; $000E28
+        BSET    #4,D4                           ; $000E2C
+        MOVE.W  D4,(A5)                         ; $000E30
+        MOVE.L  #$93409400,(A5)                 ; $000E32
+        MOVE.L  #$954096C2,(A5)                 ; $000E38
+        MOVE.W  #$977F,(A5)                     ; $000E3E
+        MOVE.W  #$C000,(A5)                     ; $000E42
+        MOVE.W  #$0080,(-14218).W               ; $000E46
+        MOVE.W  (-14218).W,(A5)                 ; $000E4C
+        MOVE.W  (-14220).W,(A5)                 ; $000E50
+        BCLR    #6,(-14322).W                   ; $000E54
+        MOVE.L  #$008BB4DC,(-13972).W           ; $000E5A
+        MOVE.B  #$01,(-14327).W                 ; $000E62
+        MOVE.B  #$01,(-14326).W                 ; $000E68
+        BSET    #6,(-14322).W                   ; $000E6E
+        MOVE.B  #$01,(-14334).W                 ; $000E74
+        BSET    #6,(-14219).W                   ; $000E7A
+        MOVE.W  (-14220).W,(A5)                 ; $000E80
+.wait_palette_done:
+        JSR     $0088B684                       ; $000E84
+        JSR     $00884998                       ; $000E8A
+        BTST    #6,(-14322).W                   ; $000E90
+        BNE.S  .wait_palette_done                        ; $000E96
+        NOP                                     ; $000E98
+        NOP                                     ; $000E9A
+        NOP                                     ; $000E9C
+        DIVU    #$0000,D0                       ; $000E9E
+        NOP                                     ; $000EA2
+        NOP                                     ; $000EA4
+        NOP                                     ; $000EA6
+        MOVE    SR,-(A7)                        ; $000EA8
+        MOVE    #$2700,SR                       ; $000EAA
+        MOVE.W  #$0100,Z80_BUSREQ                ; $000EAE
+        MOVE.W  #$0100,Z80_RESET                ; $000EB6
+.wait_z80_bus_2:
+        BTST    #0,Z80_BUSREQ                    ; $000EBE
+        BNE.S  .wait_z80_bus_2                        ; $000EC6
+        LEA     Z80_RAM,A1                    ; $000EC8
+        MOVE.B  #$F3,(A1)+                      ; $000ECE
+        MOVE.B  #$F3,(A1)+                      ; $000ED2
+        MOVE.B  #$C3,(A1)+                      ; $000ED6
+        MOVE.B  #$00,(A1)+                      ; $000EDA
+        MOVE.B  #$00,(A1)+                      ; $000EDE
+        MOVE.W  #$0000,Z80_RESET                ; $000EE2
+        NOP                                     ; $000EEA
+        NOP                                     ; $000EEC
+        NOP                                     ; $000EEE
+        NOP                                     ; $000EF0
+        NOP                                     ; $000EF2
+        NOP                                     ; $000EF4
+        NOP                                     ; $000EF6
+        NOP                                     ; $000EF8
+        NOP                                     ; $000EFA
+        NOP                                     ; $000EFC
+        NOP                                     ; $000EFE
+        NOP                                     ; $000F00
+        NOP                                     ; $000F02
+        NOP                                     ; $000F04
+        MOVE.W  #$0000,Z80_BUSREQ                ; $000F06
+        MOVE.W  #$0100,Z80_RESET                ; $000F0E
+        MOVE    (A7)+,SR                        ; $000F16
+        MOVEQ   #-$01,D0                        ; $000F18
+        MOVE.B  D0,PSG                    ; $000F1A
+        NOP                                     ; $000F20
+        NOP                                     ; $000F22
+        SUBI.B  #$20,D0                         ; $000F24
+        MOVE.B  D0,PSG                    ; $000F28
+        NOP                                     ; $000F2E
+        NOP                                     ; $000F30
+        SUBI.B  #$20,D0                         ; $000F32
+        MOVE.B  D0,PSG                    ; $000F36
+        NOP                                     ; $000F3C
+        NOP                                     ; $000F3E
+        SUBI.B  #$20,D0                         ; $000F40
+        MOVE.B  D0,PSG                    ; $000F44
+        MOVE.W  #$0100,Z80_BUSREQ                ; $000F4A
+.wait_z80_bus_3:
+        BTST    #0,Z80_BUSREQ                    ; $000F52
+        BNE.S  .wait_z80_bus_3                        ; $000F5A
+        MOVE.L  D1,-(A7)                        ; $000F5C
+        jsr     vdp_reg_init(pc)        ; $4EBA $008A
+        MOVE.L  (A7)+,D1                        ; $000F62
+        MOVE.L  #$C0000000,(A5)                 ; $000F64
+        MOVEQ   #$3F,D7                         ; $000F6A
+        MOVEQ   #$0E,D6                         ; $000F6C
+.fill_cram_loop:
+        MOVE.W  D6,VDP_DATA                    ; $000F6E
+        DBRA    D7,.fill_cram_loop                    ; $000F74
+        BSET    #6,(-14219).W                   ; $000F78
+        MOVE.W  (-14220).W,(A5)                 ; $000F7E
+        NOP                                     ; $000F82
+        NOP                                     ; $000F84
+        NOP                                     ; $000F86
+        DIVU    #$0000,D0                       ; $000F88
+        NOP                                     ; $000F8C
+        NOP                                     ; $000F8E
+        NOP                                     ; $000F90
+.normal_dispatch_loop:
+        JSR     $00894262                       ; $000F92
+        MOVE.W  #$0004,(-14214).W               ; $000F98: V-INT state (self-modified via $FF0008)
+        stop    #$2300                          ; $000F9E: halt until interrupt (level 4+)
+        tst.w   (-14214).w                      ; $000FA2: V-INT cleared $C87A? (spurious H-INT filter)
+        bne.s   .normal_dispatch_loop+12        ; $000FA6: no → back to STOP (H-INT wake, not V-INT)
+        BRA.S  .normal_dispatch_loop                        ; $000FA8
+.alt_dispatch_loop:
+        JSR     $00884CBC                       ; $000FAA
+        BSET    #0,(-14331).W                   ; $000FB0
+.wait_alt_sync:
+        TST.B  (-14331).W                       ; $000FB6
+        BNE.S  .wait_alt_sync                        ; $000FBA
+        BRA.S  .alt_dispatch_loop                        ; $000FBC
+        MOVEQ   #$0B,D7                         ; $000FBE
+        lea     vdp_display_init+448(pc),a0; $41FA $FFD0
+        LEA     $00FF0000,A1                    ; $000FC4
+        jmp     vdp_display_init+520(pc); $4EFA $000E
+        MOVEQ   #$09,D7                         ; $000FCE
+        lea     vdp_display_init+472(pc),a0; $41FA $FFD8
+        LEA     $00FF0000,A1                    ; $000FD4
+        MOVE    #$2700,SR                       ; $000FDA
+.copy_dispatch_loop:
+        MOVE.W  (A0)+,(A1)+                     ; $000FDE
+        DBRA    D7,.copy_dispatch_loop                    ; $000FE0
+        MOVE    #$2300,SR                       ; $000FE4
+        RTS                                     ; $000FE8

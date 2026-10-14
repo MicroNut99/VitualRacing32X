@@ -1,0 +1,62 @@
+# Call Graph Report
+
+**Total functions:** 15042
+**Total call sites:** 15993
+**Average calls per function:** 1.1
+
+## Top 20 Most-Called Functions
+
+| Rank | Address | Calls | Callers |
+|------|---------|-------|----------|
+| 1 | 0x022B58 | 36 | 0x022994, 0x02299C, 0x0229B8, ... +33 |
+| 2 | 0x021B2C | 19 | 0x021C28, 0x021C4A, 0x021C5A, ... +16 |
+| 3 | 0x0203D8 | 18 | 0x020298, 0x0202A8, 0x0202B8, ... +15 |
+| 4 | 0x023F2E | 17 | 0x023DEE, 0x023DFA, 0x023E00, ... +14 |
+| 5 | 0x0221C6 | 13 | 0x021B72, 0x021BEA, 0x021C20, ... +10 |
+| 6 | 0x021FAC | 11 | 0x021C14, 0x021C3A, 0x021C6C, ... +8 |
+| 7 | 0x022206 | 11 | 0x021B6C, 0x021BEE, 0x021C1C, ... +8 |
+| 8 | 0x022B4A | 11 | 0x0229A6, 0x0229AC, 0x0229CA, ... +8 |
+| 9 | 0x022248 | 10 | 0x021B78, 0x021BE6, 0x021C24, ... +7 |
+| 10 | 0x023ED0 | 10 | 0x023D80, 0x023D8C, 0x023D92, ... +7 |
+| 11 | 0x021FE6 | 8 | 0x021B66, 0x021BD6, 0x021C9E, ... +5 |
+| 12 | 0x0234A0 | 8 | 0x0233BA, 0x0233C6, 0x0233D2, ... +5 |
+| 13 | 0x020AD8 | 7 | 0x020A94, 0x020A9E, 0x020AA4, ... +4 |
+| 14 | 0x021B1C | 7 | 0x021C3E, 0x021C7A, 0x021CF6, ... +4 |
+| 15 | 0x022514 | 7 | 0x0223C2, 0x02240A, 0x02244E, ... +4 |
+| 16 | 0x022006 | 6 | 0x021BFC, 0x021CBE, 0x021E38, ... +3 |
+| 17 | 0x021B04 | 5 | 0x021C18, 0x021D40, 0x021DB0, ... +2 |
+| 18 | 0x0231AC | 5 | 0x023194, 0x02328A, 0x023298, ... +2 |
+| 19 | 0x021F3A | 4 | 0x021D52, 0x021DB6, 0x021EDC, ... +1 |
+| 20 | 0x02218A | 4 | 0x021BE2, 0x021C76, 0x021CAA, ... +1 |
+
+## Call Chains (Top Function)
+
+Starting from 0x022B58 (most called):
+
+1. 0x022B58
+
+## Leaf Functions (Never Call Others)
+
+**Count:** 13819
+
+- 0x0004CA (1 calls)
+- 0x0004E0 (1 calls)
+- 0x000DE8 (1 calls)
+- 0x00105C (1 calls)
+- 0x0012DE (1 calls)
+- 0x00181A (1 calls)
+- 0x0019FA (1 calls)
+- 0x001B94 (1 calls)
+- 0x002110 (1 calls)
+- 0x00266A (1 calls)
+- 0x00267A (1 calls)
+- 0x00271A (1 calls)
+- 0x00273E (1 calls)
+- 0x002780 (1 calls)
+- 0x0027BE (1 calls)
+- 0x00286C (1 calls)
+- 0x002874 (1 calls)
+- 0x0028B6 (1 calls)
+- 0x0028FC (1 calls)
+- 0x002970 (1 calls)
+- ... and 13799 more

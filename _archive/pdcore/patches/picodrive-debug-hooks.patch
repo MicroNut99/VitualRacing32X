@@ -1,0 +1,80 @@
+diff --git a/cpu/sh2/sh2.h b/cpu/sh2/sh2.h
+index abc1234..def5678 100644
+--- a/cpu/sh2/sh2.h
++++ b/cpu/sh2/sh2.h
+@@ -85,6 +85,10 @@ typedef struct SH2_
+ 	// interpreter stuff
+ 	int		icount;		// cycles left in current timeslice
+ 	unsigned int	ea;
++
++	// Debug hooks (pdcore debugger support - NULL when no debugger attached)
++	int (*debug_check_breakpoint)(struct SH2_ *sh2);
++	void *debug_context;
+ } SH2;
+
+
+diff --git a/cpu/sh2/mame/sh2pico.c b/cpu/sh2/mame/sh2pico.c
+index abc1234..def5678 100644
+--- a/cpu/sh2/mame/sh2pico.c
++++ b/cpu/sh2/mame/sh2pico.c
+@@ -100,6 +100,11 @@ int sh2_execute_interpreter(SH2 *sh2, int cycles)
+ 		if (sh2->test_irq && !sh2->delay && sh2->pending_level > sh2_get_sr_imask(sh2))
+ 			sh2_exception(sh2, EXCEPTION_ISR, sh2->pending_level);
+
++		// Debug hook: check for breakpoints (pdcore debugger support)
++		if (sh2->debug_check_breakpoint && sh2->debug_check_breakpoint(sh2)) {
++			break;  // Breakpoint hit - stop execution
++		}
++
+ 		do_sh2_trace(sh2, sh2->icount);
+
+ 		sh2->delay = 0;
+diff --git a/pico/pico_int.h b/pico/pico_int.h
+index abc1234..def5678 100644
+--- a/pico/pico_int.h
++++ b/pico/pico_int.h
+@@ -485,7 +485,10 @@ struct Pico32x
+   unsigned short vdp_regs[0x20/2];
+   unsigned short pending_fb;
+   unsigned short pad_3x;
+-  unsigned int reserved[3];
++  unsigned int reserved[3];
++
++  // Debug hooks (pdcore debugger support - NULL when no debugger attached)
++  void (*debug_vblank_callback)(void);
+ };
+
+ struct Pico
+diff --git a/pico/32x/32x.c b/pico/32x/32x.c
+index abc1234..def5678 100644
+--- a/pico/32x/32x.c
++++ b/pico/32x/32x.c
+@@ -250,6 +250,12 @@ static void p32x_start_blank(void)
+   // trigger V-BLANK interrupt
+   p32x_trigger_irq(NULL, Pico.t.m68c_aim, P32XI_VINT);
+
++  // Debug hook: V-BLANK callback (pdcore debugger support)
++  // Called on every V-BLANK for frame-perfect debugging
++  if (Pico32x.debug_vblank_callback) {
++    Pico32x.debug_vblank_callback();
++  }
++
+   // H-COUNT reload
+   Pico32xMem->pal_native[0] = 0; // invalidate
+ }
+diff --git a/platform/common/common.mak b/platform/common/common.mak
+index abc1234..def5678 100644
+--- a/platform/common/common.mak
++++ b/platform/common/common.mak
+@@ -105,6 +105,11 @@ SRCS_COMMON += $(R)pico/32x/32x.c $(R)pico/32x/memory.c $(R)pico/32x/draw.c \
+ ifneq "$(no_32x)" "1"
+ SRCS_COMMON += $(R)pico/32x/32x.c $(R)pico/32x/memory.c $(R)pico/32x/draw.c \
+ 	$(R)pico/32x/sh2soc.c $(R)pico/32x/pwm.c
++# pdcore debugger bridge (when USE_PDCORE is defined)
++ifeq "$(USE_PDCORE)" "1"
++SRCS_COMMON += $(R)pico/pdcore_bridge.c
++DEFINES += USE_PDCORE
++endif
+ else
+ DEFINES += NO_32X
+ endif

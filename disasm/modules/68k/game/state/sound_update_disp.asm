@@ -1,0 +1,99 @@
+; ============================================================================
+; sound_update_disp — Sound Update Dispatcher
+; ROM Range: $0020D6-$0021EE (280 bytes)
+; ============================================================================
+; Sound command update dispatcher with 7 entry points (one per game state
+; variant). Each entry:
+;   1. Checks if sound command is pending in RAM ($C874 area)
+;   2. Copies command to active slot, clears pending flag
+;   3. Saves A5/A6, calls sound driver at $008B0000, restores
+;   4. Jumps to next handler (via JMP PC-relative) or returns
+;
+; Three variants handle different sound command sources:
+;   - Type A ($0020D6, $002154): Copies $C874 → $C876, checks pending flag
+;   - Type B ($00210A, $002180): Copies $C875, simpler pending check
+;   - Type C ($00212E, $0021A4, $0021CA): Reads command from $C862, clears all
+;
+; Uses: D0, A5, A6
+; Calls:
+;   $008B0000: sound_driver_update
+;   $00232E: next handler (JMP PC-relative) — entries 1-6
+;   $00220C: next handler (JMP PC-relative) — entries 4-6
+; ============================================================================
+
+sound_update_disp:
+        TST.B  (-31478).W                       ; $0020D6
+        BNE.S  .call_driver_a1                        ; $0020DA
+        BTST    #5,(-15602).W                   ; $0020DC
+        BNE.S  .call_driver_a1                        ; $0020E2
+        MOVE.B  (-14172).W,(-31478).W           ; $0020E4
+        BEQ.S  .call_driver_a1                        ; $0020EA
+        MOVE.B  (-14172).W,(-14170).W           ; $0020EC
+        MOVE.B  #$00,(-14172).W                 ; $0020F2
+.call_driver_a1:
+        MOVEM.L A5/A6,-(A7)                     ; $0020F8
+        JSR     $008B0000                       ; $0020FC
+        MOVEM.L (A7)+,A5/A6                     ; $002102
+        jmp     audio_trigger_frequency_calc+4(pc); $4EFA $0226
+        TST.B  (-31478).W                       ; $00210A
+        BNE.S  .call_driver_b1                        ; $00210E
+        MOVE.B  (-14171).W,(-31478).W           ; $002110
+        MOVE.B  #$00,(-14171).W                 ; $002116
+.call_driver_b1:
+        MOVEM.L A5/A6,-(A7)                     ; $00211C
+        JSR     $008B0000                       ; $002120
+        MOVEM.L (A7)+,A5/A6                     ; $002126
+        jmp     audio_trigger_frequency_calc+4(pc); $4EFA $0202
+        MOVE.B  (-14302).W,D0                   ; $00212E
+        BEQ.S  .call_driver_c1                        ; $002132
+        MOVE.B  D0,(-31479).W                   ; $002134
+        MOVEQ   #$00,D0                         ; $002138
+        MOVE.B  D0,(-14302).W                   ; $00213A
+        MOVE.L  D0,(-14172).W                   ; $00213E
+.call_driver_c1:
+        MOVEM.L A5/A6,-(A7)                     ; $002142
+        JSR     $008B0000                       ; $002146
+        MOVEM.L (A7)+,A5/A6                     ; $00214C
+        jmp     audio_trigger_frequency_calc+4(pc); $4EFA $01DC
+        TST.B  (-31478).W                       ; $002154
+        BNE.S  .call_driver_a2                        ; $002158
+        MOVE.B  (-14172).W,(-31478).W           ; $00215A
+        BEQ.S  .call_driver_a2                        ; $002160
+        MOVE.B  (-14172).W,(-14170).W           ; $002162
+        MOVE.B  #$00,(-14172).W                 ; $002168
+.call_driver_a2:
+        MOVEM.L A5/A6,-(A7)                     ; $00216E
+        JSR     $008B0000                       ; $002172
+        MOVEM.L (A7)+,A5/A6                     ; $002178
+        jmp     audio_frequency_update(pc); $4EFA $008E
+        TST.B  (-31478).W                       ; $002180
+        BNE.S  .call_driver_b2                        ; $002184
+        MOVE.B  (-14171).W,(-31478).W           ; $002186
+        MOVE.B  #$00,(-14171).W                 ; $00218C
+.call_driver_b2:
+        MOVEM.L A5/A6,-(A7)                     ; $002192
+        JSR     $008B0000                       ; $002196
+        MOVEM.L (A7)+,A5/A6                     ; $00219C
+        jmp     audio_frequency_update(pc); $4EFA $006A
+        MOVE.B  (-14302).W,D0                   ; $0021A4
+        BEQ.S  .call_driver_c2                        ; $0021A8
+        MOVE.B  D0,(-31479).W                   ; $0021AA
+        MOVEQ   #$00,D0                         ; $0021AE
+        MOVE.B  D0,(-14302).W                   ; $0021B0
+        MOVE.L  D0,(-14172).W                   ; $0021B4
+.call_driver_c2:
+        MOVEM.L A5/A6,-(A7)                     ; $0021B8
+        JSR     $008B0000                       ; $0021BC
+        MOVEM.L (A7)+,A5/A6                     ; $0021C2
+        jmp     audio_frequency_update(pc); $4EFA $0044
+        MOVE.B  (-14302).W,D0                   ; $0021CA
+        BEQ.S  .call_driver_c3                        ; $0021CE
+        MOVE.B  D0,(-31479).W                   ; $0021D0
+        MOVEQ   #$00,D0                         ; $0021D4
+        MOVE.B  D0,(-14302).W                   ; $0021D6
+        MOVE.L  D0,(-14172).W                   ; $0021DA
+.call_driver_c3:
+        MOVEM.L A5/A6,-(A7)                     ; $0021DE
+        JSR     $008B0000                       ; $0021E2
+        MOVEM.L (A7)+,A5/A6                     ; $0021E8
+        RTS                                     ; $0021EC

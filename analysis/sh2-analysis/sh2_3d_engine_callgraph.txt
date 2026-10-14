@@ -1,0 +1,365 @@
+=== COMPLETE CALL GRAPH ===
+
+
+func_000 (0x0222300A - 0x0222301A):
+  (leaf function - no calls)
+
+func_001 (0x0222301C - 0x02223064):
+  -> func_005 (0x022230E6)
+  -> func_007 (0x02223176)
+  -> func_009 (0x022231E4)
+  -> func_010 (0x02223202)
+
+func_002 (0x02223066 - 0x022230CA):
+  -> func_003 (0x022230CC)
+  -> func_004 (0x022230DC)
+
+func_003 (0x022230CC - 0x022230DA):
+  (leaf function - no calls)
+
+func_004 (0x022230DC - 0x022230E4):
+  (leaf function - no calls)
+
+func_005 (0x022230E6 - 0x02223112):
+  -> func_006 (0x02223114)
+  -> JSR_@R14 (indirect)
+
+func_006 (0x02223114 - 0x02223174):
+  (leaf function - no calls)
+
+func_007 (0x02223176 - 0x022231A0):
+  -> func_008 (0x022231A2)
+  -> JSR_@R14 (indirect)
+
+func_008 (0x022231A2 - 0x022231E2):
+  (leaf function - no calls)
+
+func_009 (0x022231E4 - 0x02223200):
+  (leaf function - no calls)
+
+func_010 (0x02223202 - 0x0222321A):
+  (leaf function - no calls)
+
+func_011 (0x0222321C - 0x02223266):
+  -> func_012 (0x02223268)
+
+func_012 (0x02223268 - 0x022232C2):
+  -> func_008 (0x022231A2)
+  -> func_009 (0x022231E4)
+
+func_013 (0x022232C4 - 0x02223306):
+  (leaf function - no calls)
+
+func_014 (0x02223308 - 0x0222333E):
+  (leaf function - no calls)
+
+func_015 (0x02223340 - 0x02223358):
+  (leaf function - no calls)
+
+func_016 (0x0222335A - 0x02223386):
+  (leaf function - no calls)
+
+func_017 (0x02223388 - 0x022233A0):
+  -> func_016 (0x0222335A)
+
+func_018 (0x022233A2 - 0x0222340A):
+  -> func_016 (0x0222335A)
+  -> func_020 (0x02223468)
+
+func_019 (0x0222340C - 0x02223466):
+  -> func_016 (0x0222335A)
+  -> func_020 (0x02223468)
+
+func_020 (0x02223468 - 0x022234BE):
+  -> func_020 (0x02223468)
+  -> func_023 (0x02223500)
+
+func_021 (0x022234C0 - 0x022234EA):
+  -> func_016 (0x0222335A)
+  -> func_023 (0x02223500)
+
+func_022 (0x022234EC - 0x022234FE):
+  (leaf function - no calls)
+
+func_023 (0x02223500 - 0x022235F2):
+  -> func_024 (0x022235F4)
+  -> func_026 (0x02223642)
+  -> func_029 (0x02223686)
+  -> func_032 (0x022236D8)
+  -> func_033 (0x022236F8)
+  -> func_036 (0x022237D2)
+
+func_024 (0x022235F4 - 0x02223630):
+  (leaf function - no calls)
+
+func_025 (0x02223632 - 0x02223640):
+  (leaf function - no calls)
+
+func_026 (0x02223642 - 0x02223678):
+  (leaf function - no calls)
+
+func_027 (0x0222367A - 0x02223680):
+  (leaf function - no calls)
+
+func_028 (0x02223682 - 0x02223684):
+  (leaf function - no calls)
+
+func_029 (0x02223686 - 0x022236C8):
+  (leaf function - no calls)
+
+func_030 (0x022236CA - 0x022236D2):
+  (leaf function - no calls)
+
+func_031 (0x022236D4 - 0x022236D6):
+  (leaf function - no calls)
+
+func_032 (0x022236D8 - 0x022236F6):
+  (leaf function - no calls)
+
+func_033 (0x022236F8 - 0x0222375A):
+  -> func_034 (0x0222375C)
+
+func_034 (0x0222375C - 0x022237A6):
+  (leaf function - no calls)
+
+func_035 (0x022237A8 - 0x022237D0):
+  (leaf function - no calls)
+
+func_036 (0x022237D2 - 0x0222381A):
+  -> func_037 (0x0222381C)
+  -> func_038 (0x02223834)
+
+func_037 (0x0222381C - 0x02223830):
+  (leaf function - no calls)
+
+func_038 (0x02223834 - 0x02223838):
+  (leaf function - no calls)
+
+func_039 (0x0222383A - 0x0222385A):
+  -> func_034 (0x0222375C)
+
+func_040 (0x0222385C - 0x022238D4):
+  (leaf function - no calls)
+
+func_041 (0x022238D6 - 0x0222395A):
+  (leaf function - no calls)
+
+func_042 (0x0222395C - 0x022239A8):
+  (leaf function - no calls)
+
+func_043 (0x022239AA - 0x022239C8):
+  -> func_043 (0x022239AA)
+
+func_044 (0x022239CA - 0x02223A62):
+  -> func_043 (0x022239AA)
+  -> func_044 (0x022239CA)
+  -> JSR_@R0 (indirect)
+  -> JSR_@R0 (indirect)
+
+func_045 (0x02223A64 - 0x02223B3A):
+  -> func_046 (0x02223B3C)
+  -> JSR_@R14 (indirect)
+
+func_046 (0x02223B3C - 0x02223BC0):
+  (leaf function - no calls)
+
+func_047 (0x02223BC2 - 0x02223BEA):
+  (leaf function - no calls)
+
+func_048 (0x02223BEC - 0x02223C3C):
+  (leaf function - no calls)
+
+func_049 (0x02223C42 - 0x02223C4A):
+  (leaf function - no calls)
+
+func_050 (0x02223C4C - 0x02223C5E):
+  (leaf function - no calls)
+
+func_051 (0x02223C60 - 0x02223CA0):
+  (leaf function - no calls)
+
+func_052 (0x02223CA2 - 0x02223CAC):
+  (leaf function - no calls)
+
+func_053 (0x02223CAE - 0x02223CB0):
+  (leaf function - no calls)
+
+func_054 (0x02223CB2 - 0x02223CD8):
+  (leaf function - no calls)
+
+func_055 (0x02223CDA - 0x02223D18):
+  (leaf function - no calls)
+
+func_056 (0x02223D1A - 0x02223D3A):
+  (leaf function - no calls)
+
+func_057 (0x02223D3C - 0x02223D50):
+  (leaf function - no calls)
+
+func_058 (0x02223D52 - 0x02223D6A):
+  (leaf function - no calls)
+
+func_059 (0x02223D6C - 0x02223DC2):
+  -> func_064 (0x02223EC6)
+
+func_060 (0x02223DC4 - 0x02223E30):
+  -> func_065 (0x02223F2C)
+
+func_061 (0x02223E32 - 0x02223E5A):
+  -> func_065 (0x02223F2C)
+
+func_062 (0x02223E5C - 0x02223E86):
+  -> func_065 (0x02223F2C)
+
+func_063 (0x02223E88 - 0x02223EC4):
+  -> func_065 (0x02223F2C)
+
+func_064 (0x02223EC6 - 0x02223F2A):
+  (leaf function - no calls)
+
+func_065 (0x02223F2C - 0x02223FC2):
+  (leaf function - no calls)
+
+func_066 (0x02223FC4 - 0x02223FF0):
+  (leaf function - no calls)
+
+func_067 (0x02223FF2 - 0x02224056):
+  (leaf function - no calls)
+
+func_068 (0x02224058 - 0x02224080):
+  -> func_069 (0x02224082)
+  -> func_070 (0x022240FC)
+
+func_069 (0x02224082 - 0x022240FA):
+  (leaf function - no calls)
+
+func_070 (0x022240FC - 0x022241CA):
+  -> func_071 (0x022241CC)
+
+func_071 (0x022241CC - 0x02224202):
+  (leaf function - no calls)
+
+func_072 (0x02224204 - 0x02224222):
+  -> func_071 (0x022241CC)
+
+func_073 (0x02224224 - 0x02224270):
+  (leaf function - no calls)
+
+func_074 (0x02224272 - 0x0222429E):
+  (leaf function - no calls)
+
+func_075 (0x022242A0 - 0x022242D0):
+  (leaf function - no calls)
+
+func_076 (0x022242D2 - 0x022242F0):
+  (leaf function - no calls)
+
+func_077 (0x022242F2 - 0x0222431E):
+  (leaf function - no calls)
+
+func_078 (0x02224320 - 0x02224364):
+  -> JSR_@R0 (indirect)
+  -> JSR_@R0 (indirect)
+  -> JSR_@R0 (indirect)
+  -> JSR_@R0 (indirect)
+  -> JSR_@R0 (indirect)
+  -> JSR_@R0 (indirect)
+
+func_079 (0x02224366 - 0x022243BA):
+  -> JSR_@R0 (indirect)
+  -> JSR_@R0 (indirect)
+  -> JSR_@R0 (indirect)
+  -> JSR_@R0 (indirect)
+  -> JSR_@R0 (indirect)
+  -> JSR_@R0 (indirect)
+
+func_080 (0x022243BC - 0x022243E8):
+  (leaf function - no calls)
+
+func_081 (0x022243EA - 0x02224408):
+  (leaf function - no calls)
+
+func_082 (0x0222440A - 0x02224424):
+  (leaf function - no calls)
+
+func_083 (0x02224426 - 0x02224430):
+  (leaf function - no calls)
+
+func_084 (0x02224432 - 0x02224440):
+  (leaf function - no calls)
+
+func_085 (0x02224442 - 0x02224466):
+  (leaf function - no calls)
+
+func_086 (0x02224468 - 0x022244A4):
+  (leaf function - no calls)
+
+func_087 (0x022244A6 - 0x022244C8):
+  (leaf function - no calls)
+
+func_088 (0x022244CA - 0x022244E2):
+  (leaf function - no calls)
+
+func_089 (0x022244E4 - 0x0222451C):
+  (leaf function - no calls)
+
+func_090 (0x0222451E - 0x0222454A):
+  (leaf function - no calls)
+
+func_091 (0x0222454C - 0x0222455E):
+  (leaf function - no calls)
+
+func_092 (0x02224560 - 0x0222456C):
+  (leaf function - no calls)
+
+func_093 (0x0222456E - 0x02224596):
+  (leaf function - no calls)
+
+func_094 (0x02224598 - 0x022245BE):
+  -> func_094 (0x02224598)
+
+func_095 (0x022245C0 - 0x022245E4):
+  (leaf function - no calls)
+
+func_096 (0x022245E6 - 0x0222460E):
+  (leaf function - no calls)
+
+func_097 (0x02224610 - 0x02224636):
+  (leaf function - no calls)
+
+func_098 (0x02224638 - 0x0222465C):
+  (leaf function - no calls)
+
+func_099 (0x0222465E - 0x02224690):
+  (leaf function - no calls)
+
+func_100 (0x02224692 - 0x02224AEA):
+  -> func_101 (0x02224AEC)
+  -> JSR_@R0 (indirect)
+
+func_101 (0x02224AEC - 0x02224B74):
+  -> func_102 (0x02224B76)
+  -> JSR_@R0 (indirect)
+
+func_102 (0x02224B76 - 0x02224C58):
+  (leaf function - no calls)
+
+func_103 (0x02224C5A - 0x02224C6E):
+  (leaf function - no calls)
+
+func_104 (0x02224C70 - 0x02224C7C):
+  (leaf function - no calls)
+
+func_105 (0x02224C7E - 0x02224D14):
+  -> func_106 (0x02224D16)
+  -> JSR_@R0 (indirect)
+
+func_106 (0x02224D16 - 0x02224E82):
+  -> func_107 (0x02224E84)
+  -> func_108 (0x02224FA0)
+
+func_107 (0x02224E84 - 0x02224F9E):
+  (leaf function - no calls)
+
+func_108 (0x02224FA0 - 0x02224FFC):
+  (leaf function - no calls)

@@ -1,0 +1,239 @@
+================================================================================
+PRIORITY 8 UNDOCUMENTED FUNCTIONS - COMPLETE ANALYSIS
+================================================================================
+Virtua Racing Deluxe (USA).32x - 68K CPU Analysis
+Analysis Date: 2026-01-07
+Analyzed by: Claude Code
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+Priority 8 ROM Range:     $4000-$FFFF (file offsets)
+CPU Address Range:        $00884000-$0088FFFF
+Total Functions:          124
+Currently Documented:     83
+Undocumented (Target):    41
+
+The task is to identify which 41 functions in the Priority 8 range have NOT yet
+been documented in the analysis files.
+
+================================================================================
+KEY FINDINGS
+================================================================================
+
+1. THE 83 DOCUMENTED FUNCTIONS ARE LISTED IN:
+   File: /mnt/data/src/32x-playground/analysis/68K_ANNOTATION_TASKS.md
+   Section: "Priority 8: Main Game Logic ($4000-$FFFF)" (lines 195-280)
+
+   These 83 functions include:
+   - 3 from Priority 2 (WaitForVBlank, SetDisplayParams, call overlaps)
+   - 1 from Priority 4 (SendDREQCommand, call overlap)
+   - 79 pure Priority 8 functions
+
+2. DOCUMENTATION LOCATION:
+   File: /mnt/data/src/32x-playground/analysis/68K_MAIN_LOGIC.md
+   Status: Contains detailed disassembly and analysis of the 83 documented P8 functions
+
+3. THE 41 UNDOCUMENTED FUNCTIONS:
+   Status: Not explicitly listed in any analysis document
+   Location: Scattered throughout $4000-$FFFF address range
+   Identification: Requires ROM analysis and disassembly review
+
+================================================================================
+THE 83 DOCUMENTED PRIORITY 8 FUNCTIONS (COMPLETE LIST)
+================================================================================
+
+ADDRESSES IN ASCENDING ORDER:
+
+$00884004  $0088426E  $00884280  $00884836  $0088483A  $0088483E
+$00884842  $00884846  $00884856  $0088485E  $008848B8  $008848CA
+$008848CE  $008848D2  $008848FE  $00884920  $00884922  $00884998
+$008849AA  $00884CBC  $00885000  $00885306  $008858C8  $00885908
+$0088593C  $00885A52  $008860FD  $008864A8  $00886C88  $00886D00
+$00886D9C  $00886DC8  $00886DF0  $00886EAE  $00886F98  $008871B3
+$00887280  $00887364  $008873F2  $0088757A  $00887BE4  $00888000
+$008883AE  $008888BE  $00888DC0  $00889084  $00889A9E  $00889B7C
+$0088A144  $0088A80A  $0088A83E  $0088BA18  $0088CA20  $0088CA9A
+$0088CC06  $0088CC74  $0088CC88  $0088CD4C  $0088CD92  $0088CDD2
+$0088CE02  $0088CE76  $0088CEC2  $0088CECC  $0088CF0C  $0088CFAE
+$0088D054  $0088D08A  $0088D0F6  $0088D19C  $0088D1D4  $0088D42C
+$0088D450  $0088E316  $0088E35A  $0088E406  $0088E4BC  $0088E52C
+$0088FB36
+
+================================================================================
+STRATEGY FOR IDENTIFYING THE 41 UNDOCUMENTED FUNCTIONS
+================================================================================
+
+The 41 undocumented functions exist in the ROM but must be discovered through:
+
+APPROACH A: DISASSEMBLY ANALYSIS
+1. Generate complete P8 disassembly (16KB range)
+   Command: python3 tools/m68k_disasm.py build/vr_rebuild.32x 0x4000 8192
+
+2. Extract function prologues:
+   - MOVEM.L (48E7) - register save pattern
+   - LINK (4E56) - stack frame setup
+   - After RTS + 2 bytes from previous function
+
+3. Cross-reference with 83 documented addresses
+4. Validate candidates (must have RTS at end)
+5. Classify by functionality
+
+APPROACH B: CALL TARGET ANALYSIS
+1. Scan all BSR/JSR instructions in P8 range
+2. Extract all call targets
+3. Filter to undocumented addresses (not in 83 list)
+4. Verify each is a real function entry point
+
+APPROACH C: ADDRESS GAP ANALYSIS
+1. Create timeline of documented addresses
+2. Identify gaps between them
+3. Check for code in each gap
+4. Look for function-like patterns
+
+APPROACH D: ROM FINGERPRINTING
+1. Look for known instruction sequences
+2. Identify common function boundaries
+3. Scan for utility function patterns
+4. Cross-verify with code references
+
+================================================================================
+EXPECTED CHARACTERISTICS
+================================================================================
+
+The 41 undocumented functions likely have these traits:
+
+SIZE: 4-200 bytes (most are 30-50 bytes)
+CALLS: 0-3 calls per function (helpers/utilities)
+USAGE:
+  - Initialization routines
+  - Conditional logic branches
+  - Utility calculations
+  - Data validation
+  - Format conversions
+  - Loop controllers
+
+REGISTERS:
+  - Input: D0-D3, A0-A3 (typical parameter passing)
+  - Modified: Usually just output registers
+  - Preserved: A6, A7 (stack pointer not corrupted)
+
+PATTERNS:
+  - Table lookups
+  - Bit manipulation
+  - Conditional branches
+  - Loop iterations
+  - Data copying
+  - State transitions
+
+================================================================================
+ADDRESS GAPS TO INVESTIGATE
+================================================================================
+
+Ranges where undocumented functions likely reside:
+
+$4044-$426D  (554 bytes)  - Between func_4004 and func_426E
+$4291-$4835  (1956 bytes) - Large gap, likely contains multiple functions
+$48FB-$49FE  (260 bytes)  - Between func_48FE and func_4998
+$5387-$58C7  (3424 bytes) - Large gap with probable functions
+$59FE-$60FC  (254 bytes)  - Between func_593C and func_60FD
+$64A9-$6C87  (2014 bytes) - Major gap
+$6C89-$6CFE  (118 bytes)  - Smaller gap
+$6D01-$6D9B  (155 bytes)  - Between func_6D00 and func_6D9C
+$6EAF-$6F97  (232 bytes)  - Between func_6EAE and func_6F98
+$7285-$7363  (222 bytes)  - Between func_7280 and func_7364
+$738A-$73F1  (103 bytes)  - Between func_73F2 and next
+... and more throughout the range
+
+================================================================================
+IMPLEMENTATION ROADMAP
+================================================================================
+
+PHASE 1: EXTRACT (1-2 hours)
+□ Run complete P8 disassembly
+□ Capture all 16KB of code
+□ Save disassembly to file
+
+PHASE 2: SCAN (30-60 minutes)
+□ Implement pattern scanner for function prologues
+□ Extract all candidate addresses
+□ Cross-reference with 83 documented
+□ Generate undocumented candidate list
+
+PHASE 3: VALIDATE (2-3 hours)
+□ For each candidate:
+  □ Verify contains valid 68K code
+  □ Check for RTS at function end
+  □ Confirm reasonable function size
+  □ Trace call sites
+  □ Infer purpose
+
+PHASE 4: DOCUMENT (3-4 hours)
+□ Add each function to 68K_MAIN_LOGIC.md
+□ Include disassembly and analysis
+□ Document purpose and call frequency
+□ Update call graph
+
+PHASE 5: VERIFY (1-2 hours)
+□ Cross-check complete P8 function set
+□ Verify total = 124 functions
+□ Update ANNOTATION_TASKS.md status
+□ Final sanity checks
+
+TOTAL ESTIMATED TIME: 8-14 hours
+
+================================================================================
+VERIFICATION CRITERIA
+================================================================================
+
+For each identified undocumented function, verify:
+
+✓ Address is within $4000-$FFFF range
+✓ NOT in the 83 documented list
+✓ Contains valid 68K opcode at start
+✓ Has RTS (4E75) instruction at end
+✓ Function size is 4-2000 bytes
+✓ Purpose can be inferred from code
+✓ Is called by known code or called standalone
+✓ Follows 68K calling conventions
+✓ Register usage is consistent with pattern
+
+================================================================================
+REFERENCE FILES
+================================================================================
+
+Analysis Documents:
+  /mnt/data/src/32x-playground/analysis/68K_MAIN_LOGIC.md
+  /mnt/data/src/32x-playground/analysis/68K_ANNOTATION_TASKS.md
+  /mnt/data/src/32x-playground/analysis/PRIORITY_8_UNDOCUMENTED.md
+
+ROM File:
+  /mnt/data/src/32x-playground/build/vr_rebuild.32x (3.0 MB)
+
+Tools:
+  /mnt/data/src/32x-playground/tools/m68k_disasm.py
+  /mnt/data/src/32x-playground/tools/generate_call_graph.py
+  /mnt/data/src/32x-playground/tools/analyze_rom.py
+
+================================================================================
+CONCLUSION
+================================================================================
+
+The 41 undocumented Priority 8 functions are:
+
+1. REAL: They exist in the ROM and are part of the executable code
+2. DEFINED: They have clear boundaries (starts/ends at RTS)
+3. FUNCTIONAL: They perform specific operations in the game logic
+4. NECESSARY: They are part of the complete 68K program
+
+To fully document them requires:
+- Complete disassembly of the P8 range
+- Pattern matching for function prologues
+- Manual review and validation
+- Purpose inference from code analysis
+- Integration into existing documentation
+
+Once identified and documented, Priority 8 annotation will be COMPLETE (124/124).
+
+================================================================================

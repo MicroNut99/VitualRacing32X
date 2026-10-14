@@ -1,0 +1,64 @@
+# PicoDrive Debugger Core (pdcore) - Integrated Build with PicoDrive
+#
+# This Makefile builds pdcore linked with the actual PicoDrive emulator
+
+.PHONY: all clean test
+
+# PicoDrive location
+PICODRIVE = ../third_party/picodrive
+
+CC = gcc
+CFLAGS = -Wall -Wextra -O2 -fPIC -Iinclude \
+         -I$(PICODRIVE) \
+         -I$(PICODRIVE)/pico \
+         -I$(PICODRIVE)/cpu \
+         -D__GENERIC__ \
+         -DEMU_F68K -D_USE_CZ80 -DDRC_SH2
+
+LDFLAGS = -shared
+
+# Source files
+SOURCES = src/pdcore.c src/pdcore_bp.c src/pdcore_exec.c
+HEADERS = include/pdcore.h include/pdcore_internal.h include/pdcore_bp.h
+OBJECTS = $(SOURCES:.c=.o)
+
+# PicoDrive bridge object
+BRIDGE_SRC = $(PICODRIVE)/pico/pdcore_bridge.c
+BRIDGE_OBJ = src/pdcore_bridge.o
+
+# Output
+LIBDIR = build
+LIB = $(LIBDIR)/libpdcore_integrated.so
+
+# Targets
+all: check-picodrive $(LIB)
+
+check-picodrive:
+	@if [ ! -f $(PICODRIVE)/picodrive ]; then \
+		echo "ERROR: PicoDrive not built. Run: cd $(PICODRIVE) && ./configure && make"; \
+		exit 1; \
+	fi
+	@echo "✓ PicoDrive build found"
+
+$(LIB): $(OBJECTS) $(BRIDGE_OBJ)
+	@mkdir -p $(LIBDIR)
+	@echo "==> Linking integrated library $@"
+	$(CC) $(LDFLAGS) -o $@ $(OBJECTS) $(BRIDGE_OBJ)
+	@echo "✓ Built: $@"
+	@ls -lh $@
+
+$(BRIDGE_OBJ): $(BRIDGE_SRC)
+	@echo "==> Compiling PicoDrive bridge"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+%.o: %.c $(HEADERS)
+	@echo "==> Compiling $<"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	@echo "==> Cleaning integrated build"
+	rm -f $(OBJECTS) $(BRIDGE_OBJ)
+	rm -f $(LIBDIR)/libpdcore_integrated.so
+	@echo "✓ Clean complete"
+
+.PHONY: check-picodrive

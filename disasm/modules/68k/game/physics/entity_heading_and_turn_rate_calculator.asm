@@ -1,0 +1,91 @@
+; ============================================================================
+; entity_heading_and_turn_rate_calculator — Entity Heading and Turn Rate Calculator
+; ROM Range: $00CEEE-$00CFD6 (232 bytes)
+; Data prefix (3 × 10-byte parameter blocks). Main loop iterates over
+; 15 entities, calling obj_heading_update ($007AB6) 9 times per entity.
+; Computes heading difference via sine/cosine lookup tables at
+; $0093AC2C/$0093A82C, calculates turn rate stored to +$3A and lateral
+; force stored to +$3E. Copies display scale from +$6E to +$46.
+; Second entry point loads track overlay data from $008955CC.
+;
+; Entry: A0 = entity table base
+; Uses: D0, D7, A0, A1, A2, A6
+; Object fields: +$32 heading, +$3A turn rate, +$3E lateral force,
+;   +$46 display scale, +$6E source scale, +$C6 ref angle, +$C8 target angle
+; Confidence: high
+; ============================================================================
+
+entity_heading_and_turn_rate_calculator:
+        ORI.B  #$0F,(A6)+                       ; $00CEEE
+        DC.W    $0000                           ; $00CEF2
+        DC.W    $FFF1                           ; $00CEF4
+        DC.W    $FFE2                           ; $00CEF6
+        ORI.B  #$0F,(A6)+                       ; $00CEF8
+        DC.W    $0000                           ; $00CEFC
+        DC.W    $FFF1                           ; $00CEFE
+        DC.W    $FFE2                           ; $00CF00
+        ORI.B  #$0F,(A6)+                       ; $00CF02
+        DC.W    $0000                           ; $00CF06
+        DC.W    $FFF1                           ; $00CF08
+        DC.W    $FFE2                           ; $00CF0A
+        LEA     (-28416).W,A0                   ; $00CF0C
+        MOVEQ   #$0E,D7                         ; $00CF10
+.entity_loop:
+        MOVE.W  D7,-(A7)                        ; $00CF12
+        jsr     entity_heading_init+4(pc); $4EBA $ABA0
+        jsr     entity_heading_init+4(pc); $4EBA $AB9C
+        jsr     entity_heading_init+4(pc); $4EBA $AB98
+        jsr     entity_heading_init+4(pc); $4EBA $AB94
+        jsr     entity_heading_init+4(pc); $4EBA $AB90
+        jsr     entity_heading_init+4(pc); $4EBA $AB8C
+        jsr     entity_heading_init+4(pc); $4EBA $AB88
+        jsr     entity_heading_init+4(pc); $4EBA $AB84
+        jsr     entity_heading_init+4(pc); $4EBA $AB80
+        LEA     $0093AC2C,A1                    ; $00CF38
+        MOVE.W  $00C8(A0),D0                    ; $00CF3E
+        SUB.W  $0032(A0),D0                     ; $00CF42
+        ADD.W   D0,D0                           ; $00CF46
+        BMI.S  .sine_negative                        ; $00CF48
+        ANDI.W  #$03FF,D0                       ; $00CF4A
+        MOVE.W  $00(A1,D0.W),D0                 ; $00CF4E
+        BRA.S  .store_turn_rate                        ; $00CF52
+.sine_negative:
+        NEG.W  D0                               ; $00CF54
+        ANDI.W  #$03FF,D0                       ; $00CF56
+        MOVE.W  $00(A1,D0.W),D0                 ; $00CF5A
+        NEG.W  D0                               ; $00CF5E
+.store_turn_rate:
+        MOVE.W  D0,$003A(A0)                    ; $00CF60
+        LEA     $0093A82C,A1                    ; $00CF64
+        MOVE.W  $0032(A0),D0                    ; $00CF6A
+        SUB.W  $00C6(A0),D0                     ; $00CF6E
+        ADD.W   D0,D0                           ; $00CF72
+        BMI.S  .cosine_negative                        ; $00CF74
+        ANDI.W  #$03FF,D0                       ; $00CF76
+        MOVE.W  $00(A1,D0.W),D0                 ; $00CF7A
+        BRA.S  .store_lateral_force                        ; $00CF7E
+.cosine_negative:
+        NEG.W  D0                               ; $00CF80
+        ANDI.W  #$03FF,D0                       ; $00CF82
+        MOVE.W  $00(A1,D0.W),D0                 ; $00CF86
+        NEG.W  D0                               ; $00CF8A
+.store_lateral_force:
+        jsr     rotational_offset_calc(pc); $4EBA $A6C0
+        jsr     object_link_copy_table_lookup(pc); $4EBA $A1B8
+        MOVE.W  D0,$003E(A0)                    ; $00CF94
+        MOVE.W  $006E(A0),$0046(A0)             ; $00CF98
+        LEA     $0100(A0),A0                    ; $00CF9E
+        MOVE.W  (A7)+,D7                        ; $00CFA2
+        DBRA    D7,.entity_loop                    ; $00CFA4
+        JMP     $008836DE                       ; $00CFA8
+        MOVE.W  (-14132).W,D0                   ; $00CFAE
+        LEA     $008955CC,A1                    ; $00CFB2
+        MOVEA.L $00(A1,D0.W),A1                 ; $00CFB8
+        LEA     $00FF6178,A2                    ; $00CFBC
+        MOVEQ   #$07,D7                         ; $00CFC2
+.copy_overlay_entry:
+        MOVE.L  (A1)+,$0002(A2)                 ; $00CFC4
+        MOVE.W  (A1)+,$0006(A2)                 ; $00CFC8
+        LEA     $0014(A2),A2                    ; $00CFCC
+        DBRA    D7,.copy_overlay_entry                    ; $00CFD0
+        RTS                                     ; $00CFD4

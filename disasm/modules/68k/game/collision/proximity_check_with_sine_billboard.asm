@@ -1,0 +1,77 @@
+; ============================================================================
+; Proximity Check with Sine Billboard — 3D proximity + sine-animated sprite
+; ROM Range: $003866-$003924 (190 bytes)
+; ============================================================================
+; Checks object position against sprite table entries in 3D space.
+; First pass: static position check against thresholds (X/Z=$0C80, Y=$1400).
+; If within range, copies sprite parameters (type=2) with both static and
+; animated data. Second pass uses sine_lookup to compute oscillating offset
+; for billboard animation. Increments animation counter by 3 per call.
+;
+; Entry: A0 = player entity pointer (+$30=X, +$32=Y, +$34=Z)
+; Entry: A1 (loaded internally from $00883924 sprite table)
+; Entry: A2 (loaded internally to $00FF65B0 output buffer)
+; Uses: D0, D1, D2, D3, D4, D5, A0, A1, A2
+; Calls:
+;   $008F52: sine_lookup
+; Confidence: medium
+; ============================================================================
+
+proximity_check_with_sine_billboard:
+        LEA     $00883924,A1                    ; $003866
+        LEA     $00FF65B0,A2                    ; $00386C
+        ADDQ.W  #3,(-14110).W                   ; $003872
+        MOVE.W  #$0C80,D1                       ; $003876
+        MOVE.W  #$1400,D3                       ; $00387A
+        MOVE.W  #$0000,$0000(A2)                ; $00387E
+        MOVE.W  #$0000,$0014(A2)                ; $003884
+        MOVE.W  (-14110).W,D0                   ; $00388A
+        ANDI.W  #$1FFF,D0                       ; $00388E
+        MOVE.W  D0,$0020(A2)                    ; $003892
+        BSR.S  .check_proximity                        ; $003896
+        LEA     $0028(A2),A2                    ; $003898
+        MOVE.W  (-14110).W,D0                   ; $00389C
+        LSL.W  #8,D0                            ; $0038A0
+        MOVEM.L D1/A1,-(A7)                     ; $0038A2
+        jsr     sine_cosine_quadrant_lookup+4(pc); $4EBA $56AA
+        MOVEM.L (A7)+,D1/A1                     ; $0038AA
+        ASL.W  #2,D0                            ; $0038AE
+        MOVE.W  D0,$0020(A2)                    ; $0038B0
+        MOVE.W  #$0000,$0000(A2)                ; $0038B4
+        MOVE.W  #$0000,$0010(A2)                ; $0038BA
+.check_proximity:
+        MOVE.W  $0030(A0),D2                    ; $0038C0
+        MOVE.W  $0034(A0),D4                    ; $0038C4
+        MOVE.W  $0032(A0),D5                    ; $0038C8
+        SUB.W  (A1),D2                          ; $0038CC
+        BPL.S  .x_positive                        ; $0038CE
+        NEG.W  D2                               ; $0038D0
+.x_positive:
+        CMP.W  D1,D2                            ; $0038D2
+        BGT.S  .out_of_range                        ; $0038D4
+        SUB.W  $0002(A1),D5                     ; $0038D6
+        BPL.S  .y_positive                        ; $0038DA
+        NEG.W  D5                               ; $0038DC
+.y_positive:
+        CMP.W  D3,D5                            ; $0038DE
+        BGT.S  .out_of_range                        ; $0038E0
+        SUB.W  $0004(A1),D4                     ; $0038E2
+        BPL.S  .z_positive                        ; $0038E6
+        NEG.W  D4                               ; $0038E8
+.z_positive:
+        CMP.W  D1,D4                            ; $0038EA
+        BGT.S  .out_of_range                        ; $0038EC
+        MOVE.W  #$0002,$0000(A2)                ; $0038EE
+        MOVE.L  (A1)+,$0002(A2)                 ; $0038F4
+        MOVE.W  (A1)+,$0006(A2)                 ; $0038F8
+        MOVE.W  (A1)+,$000A(A2)                 ; $0038FC
+        MOVE.W  (A1)+,$000E(A2)                 ; $003900
+        MOVE.L  (A1)+,$0010(A2)                 ; $003904
+        MOVE.W  #$0002,$0014(A2)                ; $003908
+        MOVE.L  (A1)+,$0016(A2)                 ; $00390E
+        MOVE.W  (A1)+,$001A(A2)                 ; $003912
+        MOVE.W  (A1)+,$001E(A2)                 ; $003916
+        MOVE.W  (A1)+,$0022(A2)                 ; $00391A
+        MOVE.L  (A1)+,$0024(A2)                 ; $00391E
+.out_of_range:
+        RTS                                     ; $003922

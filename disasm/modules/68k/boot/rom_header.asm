@@ -1,0 +1,282 @@
+; ============================================================================
+; ROM Header and Exception Vector Table ($000000-$0001FF)
+; ============================================================================
+; Contains 68000 exception vectors and SEGA standard header.
+; Pure dc.w for byte-perfect ROM rebuild.
+;
+; Critical Vectors:
+;   $000000-$000003: Initial SSP (Stack Pointer) = $01000000
+;   $000004-$000007: Reset Vector (Initial PC) = $000003F0
+;   $000078-$00007B: V-INT Handler = $00001684
+;   $000072-$000073: H-INT Handler = $0000170A
+;
+; ROM Header ($000100-$0001FF):
+;   Console: "SEGA 32X U"
+;   Title: "(C)SEGA 1994.SEP"
+;   Domestic: "V.R.DX"
+;   Overseas: "V.R.DX"
+;   Serial: "GM MK-84601-00"
+;   Region: "U" (USA)
+;
+; Dependencies: None (this is the entry point)
+; ============================================================================
+
+        org     $000000
+
+header:
+        btst    d0,d0                   ; $0100
+        dc.w    $0000        ; $0002: Initial SSP (low)
+        dc.w    $0000        ; $0004: Initial PC (high)
+        dc.w    $03F0        ; $0006: Initial PC (low) - Reset vector
+        dc.w    $0088        ; $0008
+        dc.w    $0832        ; $000A
+        dc.w    $0088        ; $000C
+        dc.w    $0832        ; $000E
+        dc.w    $0088        ; $0010
+        dc.w    $0832        ; $0012
+        dc.w    $0088        ; $0014
+        dc.w    $0832        ; $0016
+        dc.w    $0088        ; $0018
+        dc.w    $0832        ; $001A
+        dc.w    $0088        ; $001C
+        dc.w    $0832        ; $001E
+        dc.w    $0088        ; $0020
+        dc.w    $0832        ; $0022
+        dc.w    $0088        ; $0024
+        dc.w    $0832        ; $0026
+        dc.w    $0088        ; $0028
+        dc.w    $0832        ; $002A
+        dc.w    $0088        ; $002C
+        dc.w    $0832        ; $002E
+        dc.w    $0000        ; $0030
+        dc.w    $0000        ; $0032
+        dc.w    $0000        ; $0034
+        dc.w    $0000        ; $0036
+        dc.w    $0000        ; $0038
+        dc.w    $0000        ; $003A
+        dc.w    $0000        ; $003C
+        dc.w    $0000        ; $003E
+        dc.w    $0000        ; $0040
+        dc.w    $0000        ; $0042
+        dc.w    $0000        ; $0044
+        dc.w    $0000        ; $0046
+        dc.w    $0000        ; $0048
+        dc.w    $0000        ; $004A
+        dc.w    $0000        ; $004C
+        dc.w    $0000        ; $004E
+        dc.w    $0000        ; $0050
+        dc.w    $0000        ; $0052
+        dc.w    $0000        ; $0054
+        dc.w    $0000        ; $0056
+        dc.w    $0000        ; $0058
+        dc.w    $0000        ; $005A
+        dc.w    $0000        ; $005C
+        dc.w    $0000        ; $005E
+        dc.w    $0088        ; $0060
+        dc.w    $0832        ; $0062
+        dc.w    $0088        ; $0064
+        dc.w    $0832        ; $0066
+        dc.w    $0088        ; $0068
+        dc.w    $0832        ; $006A
+        dc.w    $0088        ; $006C
+        dc.w    $0832        ; $006E
+        dc.w    $0088        ; $0070
+        dc.w    $170A        ; $0072
+        dc.w    $0088        ; $0074
+        dc.w    $0832        ; $0076
+        dc.w    $0088        ; $0078: IRQ6/VBlank vector (high)
+        move.b  d4,(a3)                 ; $1684
+        dc.w    $0088        ; $007C
+        dc.w    $0832        ; $007E
+        dc.w    $0088        ; $0080
+        dc.w    $0832        ; $0082
+        dc.w    $0088        ; $0084
+        dc.w    $0832        ; $0086
+        dc.w    $0088        ; $0088
+        dc.w    $0832        ; $008A
+        dc.w    $0088        ; $008C
+        dc.w    $0832        ; $008E
+        dc.w    $0088        ; $0090
+        dc.w    $0832        ; $0092
+        dc.w    $0088        ; $0094
+        dc.w    $0832        ; $0096
+        dc.w    $0088        ; $0098
+        dc.w    $0832        ; $009A
+        dc.w    $0088        ; $009C
+        dc.w    $0832        ; $009E
+        dc.w    $0088        ; $00A0
+        dc.w    $0832        ; $00A2
+        dc.w    $0088        ; $00A4
+        dc.w    $0832        ; $00A6
+        dc.w    $0088        ; $00A8
+        dc.w    $0832        ; $00AA
+        dc.w    $0088        ; $00AC
+        dc.w    $0832        ; $00AE
+        dc.w    $0088        ; $00B0
+        dc.w    $0832        ; $00B2
+        dc.w    $0088        ; $00B4
+        dc.w    $0832        ; $00B6
+        dc.w    $0088        ; $00B8
+        dc.w    $0832        ; $00BA
+        dc.w    $0088        ; $00BC
+        dc.w    $0832        ; $00BE
+        dc.w    $0000        ; $00C0
+        dc.w    $0000        ; $00C2
+        dc.w    $0000        ; $00C4
+        dc.w    $0000        ; $00C6
+        dc.w    $0000        ; $00C8
+        dc.w    $0000        ; $00CA
+        dc.w    $0000        ; $00CC
+        dc.w    $0000        ; $00CE
+        dc.w    $0000        ; $00D0
+        dc.w    $0000        ; $00D2
+        dc.w    $0000        ; $00D4
+        dc.w    $0000        ; $00D6
+        dc.w    $0000        ; $00D8
+        dc.w    $0000        ; $00DA
+        dc.w    $0000        ; $00DC
+        dc.w    $0000        ; $00DE
+        dc.w    $0000        ; $00E0
+        dc.w    $0000        ; $00E2
+        dc.w    $0000        ; $00E4
+        dc.w    $0000        ; $00E6
+        dc.w    $0000        ; $00E8
+        dc.w    $0000        ; $00EA
+        dc.w    $0000        ; $00EC
+        dc.w    $0000        ; $00EE
+        dc.w    $0000        ; $00F0
+        dc.w    $0000        ; $00F2
+        dc.w    $0000        ; $00F4
+        dc.w    $0000        ; $00F6
+        dc.w    $0000        ; $00F8
+        dc.w    $0000        ; $00FA
+        dc.w    $0000        ; $00FC
+        dc.w    $0000        ; $00FE
+        subq.w  #1,d5                   ; $5345
+        dc.w    $4741        ; $0102
+        dc.w    $2033        ; $0104
+        movea.w (a0)+,a1                ; $3258
+        movea.l (a5),a0                 ; $2055
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        movea.l d3,a4                   ; $2843
+        dc.w    $2953        ; $0112
+        dc.w    $4547        ; $0114
+        dc.w    $4120        ; $0116
+        dc.w    $3139        ; $0118
+        dc.w    $3934        ; $011A
+        movea.l (a3),a7                 ; $2E53
+        dc.w    $4550        ; $011E
+        dc.w    $562E        ; $0120
+        dc.w    $522E        ; $0122
+        neg.w    (a0)+                  ; $4458
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        dc.w    $562E        ; $0150
+        dc.w    $522E        ; $0152
+        neg.w    (a0)+                  ; $4458
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        dc.w    $474D        ; $0180
+        movea.l a5,a0                   ; $204D
+        dc.w    $4B2D        ; $0184
+        dc.w    $3834        ; $0186
+        dc.w    $3630        ; $0188
+        dc.w    $312D        ; $018A
+        dc.w    $3030        ; $018C
+        dc.w    $1E4D        ; $018E
+        dc.w    $4A36        ; $0190
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        dc.w    $0000        ; $01A0
+        dc.w    $0000        ; $01A2
+        dc.w    $002F        ; $01A4
+        dc.w    $FFFF        ; $01A6
+        dc.w    $00FF        ; $01A8
+        dc.w    $0000        ; $01AA
+        dc.w    $00FF        ; $01AC
+        dc.w    $FFFF        ; $01AE
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        subq.b  #2,-(a0)                ; $5520
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020
+        move.l  -(a0),d0                ; $2020

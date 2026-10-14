@@ -1,0 +1,78 @@
+; ============================================================================
+; PSG Channel Processor — tick handler with sequence parser
+; ROM Range: $030E20-$030ECE (174 bytes)
+; ============================================================================
+; Data prefix: FM/PSG register pair table at $030E20-$030E37.
+; Code at $030E38: PSG channel tick handler. Decrements duration timer
+; (A5+$0E). On expiry: clears bit 4, parses next sequence byte from A4:
+;   $E0+: special commands (handled by $031094)
+;   $80-$DF (negative): note-on — looks up 16-bit frequency from table
+;     at $030FE0, indexed by (byte-$81 + transpose A5+$08)
+;   $00-$7F (positive): rest/duration (handled by $0301B2)
+; If timer not expired: calls channel timer check (fm_channel_timer_check),
+; volume update ($030F0E), set volume (fm_set_volume_wrapper).
+; At $030EC2: validates frequency — if $FFFF (rest), sets mute.
+;
+; Entry: A5 = PSG channel structure pointer
+; Uses: D1, D5, D6, A0, A3, A4, A5, A6
+; Confidence: medium
+; ============================================================================
+
+psg_channel_proc:
+        ANDI.W  #$0284,(A6)+                    ; $030E20
+        ANDI.L  #$02D302FE,$032D(A3)            ; $030E24
+        BCHG    D1,(A4)+                        ; $030E2C
+        DC.W    $038F                           ; $030E2E
+        BSET    D1,D5                           ; $030E30
+        DC.W    $03FF                           ; $030E32
+        DC.W    $043C                           ; $030E34
+        DC.W    $047C                           ; $030E36
+        SUBQ.B  #1,$000E(A5)                    ; $030E38
+        BNE.S  .timer_active                    ; $030E3C
+        BCLR    #4,(A5)                         ; $030E3E
+        jsr     psg_channel_proc+62(pc) ; $4EBA $001A
+        jsr     psg_channel_proc+162(pc); $4EBA $007A
+        DC.W    $6000,$00CA         ; BRA.W  $030F16; $030E4A
+.timer_active:
+        jsr     fm_channel_timer_check(pc); $4EBA $F3CA
+        jsr     psg_volume_envelope_proc(pc); $4EBA $00BA
+        jsr     sound_timer_check(pc)   ; $4EBA $F3EA
+        DC.W    $6000,$0072         ; BRA.W  $030ECE; $030E5A
+        BCLR    #1,(A5)                         ; $030E5E
+        MOVEA.L $0004(A5),A4                    ; $030E62
+.parse_loop:
+        MOVEQ   #$00,D5                         ; $030E66
+        MOVE.B  (A4)+,D5                        ; $030E68
+        CMPI.B  #$E0,D5                         ; $030E6A
+        BCS.S  .not_special                     ; $030E6E
+        jsr     psg_freq_table_special_command_disp+180(pc); $4EBA $0222
+        BRA.S  .parse_loop                      ; $030E74
+.not_special:
+        TST.B  D5                               ; $030E76
+        BPL.S  .rest_duration                   ; $030E78
+        jsr     psg_channel_proc+114(pc); $4EBA $0016
+        MOVE.B  (A4)+,D5                        ; $030E7E
+        TST.B  D5                               ; $030E80
+        BPL.S  .rest_duration                   ; $030E82
+        SUBQ.W  #1,A4                           ; $030E84
+        DC.W    $6000,$F34A         ; BRA.W  $0301D2; $030E86
+.rest_duration:
+        DC.W    $4EBA,$F326         ; JSR     $0301B2(PC); $030E8A
+        DC.W    $6000,$F342         ; BRA.W  $0301D2; $030E8E
+        SUBI.B  #$81,D5                         ; $030E92
+        BCS.S  .out_of_range                    ; $030E96
+        ADD.B  $0008(A5),D5                     ; $030E98
+        ANDI.W  #$007F,D5                       ; $030E9C
+        LSL.W  #1,D5                            ; $030EA0
+        lea     psg_freq_table_special_command_disp(pc),a0; $41FA $013C
+        MOVE.W  $00(A0,D5.W),$0010(A5)          ; $030EA6
+        DC.W    $6000,$F324         ; BRA.W  $0301D2; $030EAC
+.out_of_range:
+        BSET    #1,(A5)                         ; $030EB0
+        MOVE.W  #$FFFF,$0010(A5)                ; $030EB4
+        DC.W    $4EBA,$F316         ; JSR     $0301D2(PC); $030EBA
+        DC.W    $6000,$00F2         ; BRA.W  $030FB2; $030EBE
+        MOVE.W  $0010(A5),D6                    ; $030EC2
+        DC.W    $6A0C               ; BPL.S  $030ED4; $030EC6
+        BSET    #1,(A5)                         ; $030EC8
+        RTS                                     ; $030ECC

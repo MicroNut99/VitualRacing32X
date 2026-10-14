@@ -1,0 +1,81 @@
+; ============================================================================
+; FM Instrument Register Write — full operator + TL register setup
+; ROM Range: $0312B4-$031352 (158 bytes)
+; ============================================================================
+; Multiple entry points:
+;   $0312B4: Write register pair (D0,D1 from seq) via fm_conditional_write.
+;   $0312BC: Write register pair via fm_write_wrapper.
+;   $0312C4: Full instrument setup. Reads instrument index, resolves data
+;     pointer from A6+$30/A5+$20/A6+$34. Writes slot register $B0
+;     (feedback/algo), then 20 operator registers from table at $0313CA.
+;     Writes 4 TL registers with volume scaling: uses key scaling table
+;     at $031352, adds channel volume (A5+$09) to operators where carry
+;     bit is set. Finally writes panning register $B4.
+;
+; Entry: A5 = channel structure pointer, A4 = sequence pointer
+; Entry: A6 = sound driver state pointer
+; Uses: D0, D1, D3, D4, D5, A1, A2, A4
+; Calls:
+;   $030CCC: fm_write_conditional
+;   $030D1C: z80_bus_request
+; Confidence: high
+; ============================================================================
+
+fm_instrument_reg_write:
+        MOVE.B  (A4)+,D0                        ; $0312B4
+        MOVE.B  (A4)+,D1                        ; $0312B6
+        DC.W    $6000,$F9E8         ; BRA.W  $030CA2; $0312B8
+        MOVE.B  (A4)+,D0                        ; $0312BC
+        MOVE.B  (A4)+,D1                        ; $0312BE
+        DC.W    $6000,$F9F8         ; BRA.W  $030CBA; $0312C0
+        MOVEQ   #$00,D0                         ; $0312C4
+        MOVE.B  (A4)+,D0                        ; $0312C6
+        MOVE.B  D0,$000B(A5)                    ; $0312C8
+        BTST    #2,(A5)                         ; $0312CC
+        BNE.W  .done                            ; $0312D0
+        MOVEA.L $0030(A6),A1                    ; $0312D4
+        TST.B  $000E(A6)                        ; $0312D8
+        BEQ.S  .instr_ptr_ready                 ; $0312DC
+        MOVEA.L $0020(A5),A1                    ; $0312DE
+        BMI.S  .instr_ptr_ready                 ; $0312E2
+        MOVEA.L $0034(A6),A1                    ; $0312E4
+.instr_ptr_ready:
+        SUBQ.W  #1,D0                           ; $0312E8
+        BMI.S  .skip_advance                    ; $0312EA
+        MOVE.W  #$0019,D1                       ; $0312EC
+.advance_to_instrument:
+        ADDA.W  D1,A1                           ; $0312F0
+        DBRA    D0,.advance_to_instrument        ; $0312F2
+.skip_advance:
+        jsr     z80_bus_wait(pc)        ; $4EBA $FA24
+        MOVE.B  (A1)+,D1                        ; $0312FA
+        MOVE.B  D1,$0025(A5)                    ; $0312FC
+        MOVE.B  D1,D4                           ; $031300
+        MOVE.B  #$B0,D0                         ; $031302
+        jsr     fm_write_cond(pc)       ; $4EBA $F9C4
+        lea     fm_reg_table_vibrato_setup(pc),a2; $45FA $00BE
+        MOVEQ   #$13,D3                         ; $03130E
+.operator_reg_loop:
+        MOVE.B  (A2)+,D0                        ; $031310
+        MOVE.B  (A1)+,D1                        ; $031312
+        jsr     fm_write_cond(pc)       ; $4EBA $F9B6
+        DBRA    D3,.operator_reg_loop            ; $031318
+        MOVEQ   #$03,D5                         ; $03131C
+        ANDI.W  #$0007,D4                       ; $03131E
+        MOVE.B  $031352(PC,D4.W),D4             ; $031322
+        MOVE.B  $0009(A5),D3                    ; $031326
+.tl_operator_loop:
+        MOVE.B  (A2)+,D0                        ; $03132A
+        MOVE.B  (A1)+,D1                        ; $03132C
+        LSR.B  #1,D4                            ; $03132E
+        BCC.S  .write_tl                        ; $031330
+        ADD.B   D3,D1                           ; $031332
+.write_tl:
+        jsr     fm_write_cond(pc)       ; $4EBA $F996
+        DBRA    D5,.tl_operator_loop             ; $031338
+        MOVE.B  #$B4,D0                         ; $03133C
+        MOVE.B  $0027(A5),D1                    ; $031340
+        jsr     fm_write_cond(pc)       ; $4EBA $F986
+        MOVE.W  #$0000,Z80_BUSREQ                ; $031348
+.done:
+        RTS                                     ; $031350

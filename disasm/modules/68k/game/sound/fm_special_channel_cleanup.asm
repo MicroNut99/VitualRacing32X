@@ -1,0 +1,51 @@
+; ============================================================================
+; FM Special Channel Cleanup — stop DAC and noise effect channels
+; ROM Range: $0309F2-$030A5C (106 bytes)
+; ============================================================================
+; Handles cleanup of two special sound channels:
+;   Channel $0340 (DAC/PCM): clears active flag, checks key-off, calls
+;     $030C96 cleanup, maps to struct at $0100, clears/mutes, calls
+;     $0312E8 with instrument data from A6+$0030 pointer.
+;   Channel $0370 (noise): clears active flag, checks key-off, calls
+;     $030FB8 cleanup, maps to struct at $01F0, clears/mutes. If type
+;     is $E0, writes PSG silence byte from channel +$25.
+;
+; Entry: A6 = sound driver state pointer
+; Uses: D0, A1, A5, A6
+; Confidence: medium
+; ============================================================================
+
+fm_special_channel_cleanup:
+        LEA     $0340(A6),A5                    ; $0309F2
+        TST.B  (A5)                             ; $0309F6
+        BPL.S  .cleanup_noise                   ; $0309F8
+        BCLR    #7,(A5)                         ; $0309FA
+        BTST    #2,(A5)                         ; $0309FE
+        BNE.S  .cleanup_noise                   ; $030A02
+        jsr     fm_init_channel+12(pc)  ; $4EBA $0290
+        LEA     $0100(A6),A5                    ; $030A08
+        BCLR    #2,(A5)                         ; $030A0C
+        BSET    #1,(A5)                         ; $030A10
+        TST.B  (A5)                             ; $030A14
+        BPL.S  .cleanup_noise                   ; $030A16
+        MOVEA.L $0030(A6),A1                    ; $030A18
+        MOVE.B  $000B(A5),D0                    ; $030A1C
+        jsr     fm_instrument_reg_write+52(pc); $4EBA $08C6
+.cleanup_noise:
+        LEA     $0370(A6),A5                    ; $030A24
+        TST.B  (A5)                             ; $030A28
+        BPL.S  .done                            ; $030A2A
+        BCLR    #7,(A5)                         ; $030A2C
+        BTST    #2,(A5)                         ; $030A30
+        BNE.S  .done                            ; $030A34
+        jsr     psg_set_pos_silence+22(pc); $4EBA $0580
+        LEA     $01F0(A6),A5                    ; $030A3A
+        BCLR    #2,(A5)                         ; $030A3E
+        BSET    #1,(A5)                         ; $030A42
+        TST.B  (A5)                             ; $030A46
+        BPL.S  .done                            ; $030A48
+        CMPI.B  #$E0,$0001(A5)                  ; $030A4A
+        BNE.S  .done                            ; $030A50
+        MOVE.B  $0025(A5),PSG             ; $030A52
+.done:
+        RTS                                     ; $030A5A

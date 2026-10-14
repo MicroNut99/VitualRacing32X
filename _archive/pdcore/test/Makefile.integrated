@@ -1,0 +1,38 @@
+# Integration Test with Real PicoDrive
+#
+# Build and run tests against the actual PicoDrive emulator
+
+PICODRIVE = ../../third_party/picodrive
+
+CC = gcc
+CFLAGS = -Wall -Wextra -O2 -I../include \
+         -I$(PICODRIVE) \
+         -I$(PICODRIVE)/pico \
+         -I$(PICODRIVE)/cpu \
+         -D__GENERIC__ \
+         -DEMU_F68K -D_USE_CZ80 -DDRC_SH2
+
+# Link with the integrated pdcore library
+LDFLAGS = -L../build -lpdcore_integrated -Wl,-rpath,'$$ORIGIN/../build'
+
+TARGET = integration_real_test
+
+all: $(TARGET)
+
+$(TARGET): integration_real.c
+	@echo "==> Building real integration test"
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+	@echo "✓ Built: $@"
+
+run: $(TARGET)
+	@echo "==> Running integration test"
+	./$(TARGET)
+
+run-with-rom: $(TARGET)
+	@echo "==> Running integration test with VRD ROM"
+	./$(TARGET) ../../roms/Virtua\ Racing\ Deluxe\ \(USA\).32x
+
+clean:
+	rm -f $(TARGET)
+
+.PHONY: all run run-with-rom clean

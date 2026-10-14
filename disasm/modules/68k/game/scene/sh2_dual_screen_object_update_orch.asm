@@ -1,0 +1,115 @@
+; ============================================================================
+; sh2_dual_screen_object_update_orch — SH2 Dual-Screen Object Update Orchestrator
+; ROM Range: $00DE98-$00DFEC (340 bytes)
+; Data prefix (54 bytes: display command tables for single/dual screen
+; configurations). Per-frame SH2 update for dual-screen mode. Sends
+; DMA transfer, runs object/sprite update, transfers geometry and
+; sprite data via multiple sh2_send_cmd calls. Includes internal
+; subroutine call at $00E118. Handles exit with dual-player button
+; detection and fade-out transition ($A8 sound).
+;
+; Uses: D0, D1, D2, D3, A0, A1, A2, A5
+; Calls: $00B684 (object_update), $00B6DA (sprite_update),
+;        $00E35A (sh2_send_cmd), $00E52C (dma_transfer)
+; Confidence: high
+; ============================================================================
+
+sh2_dual_screen_object_update_orch:
+        MOVE.L  D1,D2                           ; $00DE98
+        OR.B   (A0),D0                          ; $00DE9A
+        DC.W    $003A                           ; $00DE9C
+        MOVE.L  D1,D2                           ; $00DE9E
+        DC.W    $8049                           ; $00DEA0
+        DC.W    $003B                           ; $00DEA2
+        MOVE.L  D1,D2                           ; $00DEA4
+        or.l    d3,d0                   ; $8083
+        DC.W    $003A                           ; $00DEA8
+        MOVE.L  D1,D2                           ; $00DEAA
+        OR.L   #$003A2401,D0                    ; $00DEAC
+        DIVU    $3B(A5,D0.W),D0                 ; $00DEB2
+        MOVE.L  D3,D2                           ; $00DEB6
+        OR.B   (A2),D2                          ; $00DEB8
+        MOVE.L  D3,D2                           ; $00DEBA
+        DC.W    $844C                           ; $00DEBC
+        MOVE.L  D3,D2                           ; $00DEBE
+        or.l    d6,d2                   ; $8486
+        MOVE.L  D3,D2                           ; $00DEC2
+        DC.W    $84BE                           ; $00DEC4
+        MOVE.L  D3,D2                           ; $00DEC6
+        DIVU    (-13108).W,D2                   ; $00DEC8
+        DC.W    $0CCC                           ; $00DECC
+        CLR.W  D0                               ; $00DECE
+        MOVE.B  (-24537).W,D0                   ; $00DED0
+        jsr     MemoryInit(pc)          ; $4EBA $0656
+        jsr     object_update(pc)       ; $4EBA $D7AA
+        jsr     animated_seq_player+10(pc); $4EBA $D7FC
+.wait_comm_ready:
+        TST.B  COMM0_HI                        ; $00DEE0
+        BNE.S  .wait_comm_ready                 ; $00DEE6
+        MOVEA.L #$06037000,A0                   ; $00DEE8
+        MOVEA.L #$24014010,A1                   ; $00DEEE
+        MOVE.W  #$0120,D0                       ; $00DEF4
+        MOVE.W  #$0030,D1                       ; $00DEF8
+        DC.W    $6100,$045C         ; BSR.W  $00E35A; $00DEFC
+        MOVEA.L #$0603B600,A0                   ; $00DF00
+        MOVEA.L #$2401C010,A1                   ; $00DF06
+        MOVE.W  #$0120,D0                       ; $00DF0C
+        MOVE.W  #$0010,D1                       ; $00DF10
+        DC.W    $6100,$0444         ; BSR.W  $00E35A; $00DF14
+.wait_comm_ready_2:
+        TST.B  COMM0_HI                        ; $00DF18
+        BNE.S  .wait_comm_ready_2               ; $00DF1E
+        bsr.w   sh2_cmd_27_sprite_render; $6100 $01F6
+        MOVEA.L #$0603DA00,A0                   ; $00DF24
+        MOVEA.L #$2401AC88,A1                   ; $00DF2A
+        MOVE.W  #$0038,D0                       ; $00DF30
+        MOVE.W  #$0010,D1                       ; $00DF34
+        DC.W    $6100,$0420         ; BSR.W  $00E35A; $00DF38
+        MOVE.W  #$0018,$00FF0008                ; $00DF3C
+        CMPI.W  #$0001,(-24532).W               ; $00DF44
+        BEQ.W  .check_fade_done                 ; $00DF4A
+        CMPI.W  #$0002,(-24532).W               ; $00DF4E
+        BEQ.W  .check_fade_complete             ; $00DF54
+        MOVE.W  (-14228).W,D1                   ; $00DF58
+        ANDI.B  #$E0,D1                         ; $00DF5C
+        BNE.S  .begin_fadeout                    ; $00DF60
+        CMPI.B  #$02,(-24540).W                 ; $00DF62
+        BNE.W  .check_start_btn                 ; $00DF68
+        MOVE.W  (-14226).W,D1                   ; $00DF6C
+        MOVE.W  D1,D2                           ; $00DF70
+        ANDI.B  #$E0,D2                         ; $00DF72
+        BNE.S  .begin_fadeout                    ; $00DF76
+        ANDI.B  #$10,D1                         ; $00DF78
+        BNE.S  .set_exit_flag                   ; $00DF7C
+.check_start_btn:
+        MOVE.W  (-14228).W,D1                   ; $00DF7E
+        ANDI.B  #$10,D1                         ; $00DF82
+        BNE.S  .set_exit_flag                   ; $00DF86
+        SUBQ.W  #8,(-14210).W                   ; $00DF88
+        BRA.W  .finish                          ; $00DF8C
+.set_exit_flag:
+        ST      (-24552).W                      ; $00DF90
+.begin_fadeout:
+        MOVE.B  #$A8,(-14172).W                 ; $00DF94
+        MOVE.B  #$01,(-14327).W                 ; $00DF9A
+        MOVE.B  #$01,(-14326).W                 ; $00DFA0
+        BSET    #7,(-14322).W                   ; $00DFA6
+        MOVE.B  #$01,(-14334).W                 ; $00DFAC
+        MOVE.W  #$0002,(-24532).W               ; $00DFB2
+        BRA.W  .dec_timer                       ; $00DFB8
+.check_fade_done:
+        BTST    #6,(-14322).W                   ; $00DFBC
+        BNE.S  .dec_timer                       ; $00DFC2
+        CLR.W  (-24532).W                       ; $00DFC4
+        BRA.W  .dec_timer                       ; $00DFC8
+.check_fade_complete:
+        BTST    #7,(-14322).W                   ; $00DFCC
+        BNE.S  .dec_timer                       ; $00DFD2
+        CLR.W  (-24532).W                       ; $00DFD4
+        ADDQ.W  #4,(-14210).W                   ; $00DFD8
+        BRA.W  .finish                          ; $00DFDC
+.dec_timer:
+        SUBQ.W  #8,(-14210).W                   ; $00DFE0
+.finish:
+        MOVE.B  #$01,(-14303).W                 ; $00DFE4
+        RTS                                     ; $00DFEA

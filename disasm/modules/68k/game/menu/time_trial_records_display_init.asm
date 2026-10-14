@@ -1,0 +1,347 @@
+; ============================================================================
+; time_trial_records_display_init — Time Trial Records Display Initialization
+; ROM Range: $00FB98-$010084 (1260 bytes)
+; Major scene initialization for time trial records display. Searches
+; timing records to find player's position, sorts entries using
+; insertion sort with BCD time comparison via ABCD/SBCD instructions.
+; Computes record table addresses from player/track indices. Loads
+; SH2 palette, tile graphics, and 8 compressed data blocks. Configures
+; 32X VDP for records overlay. Marks insertion points in record table
+; with $20 padding bytes.
+;
+; Uses: D0, D1, D2, D3, D4, D5, A0, A1
+; Calls: $00E1BC (sh2_palette_load), $00E22C (sh2_graphics_cmd),
+;        $00E2F0 (sh2_load_data), $00E316 (sh2_send_cmd_wait)
+; Confidence: high
+; ============================================================================
+
+time_trial_records_display_init:
+        MOVE.W  #$002C,$00FF0008                ; $00FB98
+        MOVE.W  #$002C,(-14214).W               ; $00FBA0
+        BCLR    #6,(-14219).W                   ; $00FBA6
+        MOVE.W  (-14220).W,(A5)                 ; $00FBAC
+        MOVE.W  #$0083,MARS_SYS_INTCTL                ; $00FBB0
+        ANDI.B  #$FC,MARS_VDP_MODE+1                  ; $00FBB8
+        JSR     $008826C8                       ; $00FBC0
+        MOVE.L  #$000A0907,D0                   ; $00FBC6
+        JSR     $008814BE                       ; $00FBCC
+        MOVE.B  #$01,(-14323).W                 ; $00FBD2
+        MOVE.W  #$0000,(-24556).W               ; $00FBD8
+        BTST    #4,(-14322).W                   ; $00FBDE
+        BNE.W  .no_new_record                        ; $00FBE4
+        BTST    #5,(-14322).W                   ; $00FBE8
+        BNE.W  .no_new_record                        ; $00FBEE
+        BTST    #7,(-600).W                     ; $00FBF2
+        BNE.W  .no_new_record                        ; $00FBF8
+        MOVE.L  (-15776).W,D0                   ; $00FBFC
+        CMPI.L  #$60000000,D0                   ; $00FC00
+        BGE.W  .find_best_time                        ; $00FC06
+        MOVE.B  #$00,(-24543).W                 ; $00FC0A
+        MOVE.W  (-16222).W,D0                   ; $00FC10
+        MOVE.W  (-16220).W,D1                   ; $00FC14
+        CMP.W  D0,D1                            ; $00FC18
+        BCS.W  .check_lap3                        ; $00FC1A
+        MOVE.B  #$01,(-24543).W                 ; $00FC1E
+        MOVE.W  D1,D0                           ; $00FC24
+.check_lap3:
+        MOVE.W  (-16218).W,D1                   ; $00FC26
+        CMP.W  D0,D1                            ; $00FC2A
+        BCS.W  .check_lap4                        ; $00FC2C
+        MOVE.B  #$02,(-24543).W                 ; $00FC30
+        MOVE.W  D1,D0                           ; $00FC36
+.check_lap4:
+        MOVE.W  (-16216).W,D1                   ; $00FC38
+        CMP.W  D0,D1                            ; $00FC3C
+        BCS.W  .compute_player_offset                        ; $00FC3E
+        MOVE.B  #$03,(-24543).W                 ; $00FC42
+.compute_player_offset:
+        MOVEQ   #$00,D0                         ; $00FC48
+        MOVEQ   #$00,D1                         ; $00FC4A
+        MOVE.B  (-335).W,D0                     ; $00FC4C
+        BEQ.S  .have_player_offset                        ; $00FC50
+        SUBQ.W  #1,D0                           ; $00FC52
+.player_offset_loop:
+        ADDI.L  #$000003C0,D1                   ; $00FC54
+        DBRA    D0,.player_offset_loop                    ; $00FC5A
+.have_player_offset:
+        LEA     (-4344).W,A0                    ; $00FC5E
+        ADDA.L  D1,A0                           ; $00FC62
+        MOVEQ   #$00,D0                         ; $00FC64
+        MOVE.B  (-347).W,D0                     ; $00FC66
+        ADD.W  D0,D0                           ; $00FC6A
+        ADD.W  D0,D0                           ; $00FC6C
+        ADD.W  D0,D0                           ; $00FC6E
+        ADD.W  D0,D0                           ; $00FC70
+        MOVE.W  D0,D1                           ; $00FC72
+        ADD.W  D0,D0                           ; $00FC74
+        ADD.W  D0,D0                           ; $00FC76
+        ADD.W  D1,D0                           ; $00FC78
+        ADD.W  D0,D0                           ; $00FC7A
+        ADDA.L  D0,A0                           ; $00FC7C
+        MOVE.L  (-15776).W,D0                   ; $00FC7E
+        CMP.L  $009C(A0),D0                     ; $00FC82
+        BHI.W  .find_best_time                        ; $00FC86
+        MOVEQ   #$00,D1                         ; $00FC8A
+        MOVE.W  #$0013,D2                       ; $00FC8C
+        MOVE.B  (-24543).W,D5                   ; $00FC90
+.search_insert_loop:
+        CMP.L  $04(A0,D1.W),D0                  ; $00FC94
+        BCS.W  .found_insert_point                        ; $00FC98
+        ADDQ.W  #8,D1                           ; $00FC9C
+        DBRA    D2,.search_insert_loop                    ; $00FC9E
+        BRA.W  .find_best_time                        ; $00FCA2
+.found_insert_point:
+        MOVE.B  #$01,(-24556).W                 ; $00FCA6
+        MOVE.W  #$0013,D3                       ; $00FCAC
+        SUB.W  D2,D3                           ; $00FCB0
+        MOVE.W  D3,(-24542).W                   ; $00FCB2
+        MOVE.L  A0,(-24552).W                   ; $00FCB6
+        ANDI.L  #$0000FFFF,D1                   ; $00FCBA
+        ADD.L  D1,(-24552).W                    ; $00FCC0
+.shift_entries_loop:
+        MOVE.L  $00(A0,D1.W),D3                 ; $00FCC4
+        MOVE.L  $04(A0,D1.W),D4                 ; $00FCC8
+        MOVE.L  D5,$00(A0,D1.W)                 ; $00FCCC
+        MOVE.L  D0,$04(A0,D1.W)                 ; $00FCD0
+        MOVE.L  D4,D0                           ; $00FCD4
+        MOVE.L  D3,D5                           ; $00FCD6
+        ADDQ.W  #8,D1                           ; $00FCD8
+        DBRA    D2,.shift_entries_loop                    ; $00FCDA
+.find_best_time:
+        LEA     (-15872).W,A0                   ; $00FCDE
+        MOVE.L  #$60000000,D0                   ; $00FCE2
+        MOVE.W  #$0013,D3                       ; $00FCE8
+.scan_times_loop:
+        MOVE.L  (A0)+,D1                        ; $00FCEC
+        BEQ.S  .next_time_entry                        ; $00FCEE
+        CMP.L  D1,D0                            ; $00FCF0
+        BLE.S  .next_time_entry                        ; $00FCF2
+        MOVE.L  D1,D0                           ; $00FCF4
+.next_time_entry:
+        ADDI.L  #$00000D80,D2                   ; $00FCF6
+        DBRA    D3,.scan_times_loop                    ; $00FCFC
+        MOVE.L  D0,D2                           ; $00FD00
+        LEA     (-1464).W,A0                    ; $00FD02
+        MOVEQ   #$00,D0                         ; $00FD06
+        MOVE.B  (-335).W,D0                     ; $00FD08
+        ADD.W  D0,D0                           ; $00FD0C
+        ADD.W  D0,D0                           ; $00FD0E
+        ADD.W  D0,D0                           ; $00FD10
+        MOVE.W  D0,D1                           ; $00FD12
+        ADD.W  D0,D0                           ; $00FD14
+        ADD.W  D1,D0                           ; $00FD16
+        ADD.W  D0,D0                           ; $00FD18
+        ADDA.L  D0,A0                           ; $00FD1A
+        MOVEQ   #$00,D0                         ; $00FD1C
+        MOVE.B  (-347).W,D0                     ; $00FD1E
+        ADD.W  D0,D0                           ; $00FD22
+        ADD.W  D0,D0                           ; $00FD24
+        ADD.W  D0,D0                           ; $00FD26
+        ADDQ.W  #4,D0                           ; $00FD28
+        CMP.L  $00(A0,D0.W),D2                  ; $00FD2A
+        BHI.W  .store_best_time                        ; $00FD2E
+        ADDQ.B  #2,(-24556).W                   ; $00FD32
+        MOVE.L  A0,(-24548).W                   ; $00FD36
+        ANDI.L  #$0000FFFF,D0                   ; $00FD3A
+        ADD.L  D0,(-24548).W                    ; $00FD40
+        SUBQ.L  #4,(-24548).W                   ; $00FD44
+        MOVE.L  D2,$00(A0,D0.W)                 ; $00FD48
+.store_best_time:
+        MOVE.L  (-15776).W,(-24526).W           ; $00FD4C
+        MOVE.L  (-15776).W,D0                   ; $00FD52
+        CMPI.L  #$60000000,D0                   ; $00FD56
+        BGE.W  .no_new_record                        ; $00FD5C
+        BRA.W  .check_record_status                        ; $00FD60
+.no_new_record:
+        LEA     (-15872).W,A0                   ; $00FD64
+        MOVE.W  #$0013,D0                       ; $00FD68
+.find_empty_slot:
+        TST.L  (A0)                             ; $00FD6C
+        BEQ.W  .begin_bcd_accum                        ; $00FD6E
+        ADDQ.L  #4,A0                           ; $00FD72
+        DBRA    D0,.find_empty_slot                    ; $00FD74
+.begin_bcd_accum:
+        CLR.L  (-24526).W                       ; $00FD78
+        LEA     (-24526).W,A0                   ; $00FD7C
+        LEA     (-15872).W,A1                   ; $00FD80
+        MOVE.W  #$0013,D2                       ; $00FD84
+.bcd_accum_loop:
+        ADDI.B  #$00,D0                         ; $00FD88
+        MOVE.B  $0003(A0),D0                    ; $00FD8C
+        MOVE.B  $0003(A1),D1                    ; $00FD90
+        ABCD   D1,D0                           ; $00FD94
+        MOVE.B  D0,$0003(A0)                    ; $00FD96
+        MOVE.B  $0002(A0),D0                    ; $00FD9A
+        MOVE.B  $0002(A1),D1                    ; $00FD9E
+        ABCD   D1,D0                           ; $00FDA2
+        MOVE.B  D0,D1                           ; $00FDA4
+        ANDI.B  #$0F,D0                         ; $00FDA6
+        MOVE.B  D0,$0002(A0)                    ; $00FDAA
+        LSR.B  #4,D1                            ; $00FDAE
+        ADDI.B  #$00,D0                         ; $00FDB0
+        MOVE.B  $0001(A0),D0                    ; $00FDB4
+        ABCD   D1,D0                           ; $00FDB8
+        MOVE.B  $0001(A1),D1                    ; $00FDBA
+        ABCD   D1,D0                           ; $00FDBE
+        BCC.W  .no_carry                        ; $00FDC0
+        ADDI.B  #$00,D0                         ; $00FDC4
+        MOVE.B  #$40,D1                         ; $00FDC8
+        ABCD   D1,D0                           ; $00FDCC
+        MOVE.B  #$01,D1                         ; $00FDCE
+        BRA.S  .store_minutes                        ; $00FDD2
+.no_carry:
+        CLR.B  D1                               ; $00FDD4
+        CMPI.B  #$60,D0                         ; $00FDD6
+        BCS.W  .store_minutes                        ; $00FDDA
+        ADDI.B  #$00,D0                         ; $00FDDE
+        MOVE.B  #$60,D1                         ; $00FDE2
+        SBCD   D1,D0                           ; $00FDE6
+        MOVE.B  #$01,D1                         ; $00FDE8
+.store_minutes:
+        MOVE.B  D0,$0001(A0)                    ; $00FDEC
+        ADDI.B  #$00,D0                         ; $00FDF0
+        MOVE.B  (A0),D0                         ; $00FDF4
+        ABCD   D1,D0                           ; $00FDF6
+        MOVE.B  (A1),D1                         ; $00FDF8
+        ABCD   D1,D0                           ; $00FDFA
+        MOVE.B  D0,(A0)                         ; $00FDFC
+        ADDQ.L  #4,A1                           ; $00FDFE
+        DBRA    D2,.bcd_accum_loop                    ; $00FE00
+.check_record_status:
+        TST.B  (-24556).W                       ; $00FE04
+        BNE.W  .init_display                        ; $00FE08
+        MOVE.W  #$0000,(-14210).W               ; $00FE0C
+        MOVE.W  #$0020,$00FF0008                ; $00FE12
+        MOVE.L  #$008909AE,$00FF0002            ; $00FE1A
+        CLR.B  COMM1_LO                        ; $00FE24
+        BRA.W  .done                        ; $00FE2A
+.init_display:
+        MOVEQ   #$00,D0                         ; $00FE2E
+        LEA     (-31616).W,A0                   ; $00FE30
+        MOVEQ   #$1F,D1                         ; $00FE34
+.clear_ram_loop:
+        MOVE.L  D0,(A0)+                        ; $00FE36
+        DBRA    D1,.clear_ram_loop                    ; $00FE38
+        LEA     $00FF7B80,A0                    ; $00FE3C
+        MOVEQ   #$7F,D1                         ; $00FE42
+.clear_ext_ram_loop:
+        MOVE.L  D0,(A0)+                        ; $00FE44
+        DBRA    D1,.clear_ext_ram_loop                    ; $00FE46
+        MOVE.L  #$60000002,(A5)                 ; $00FE4A
+        MOVE.W  #$17FF,D1                       ; $00FE50
+.clear_vram_loop:
+        MOVE.L  D0,(A6)                         ; $00FE54
+        DBRA    D1,.clear_vram_loop                    ; $00FE56
+        JSR     $008849AA                       ; $00FE5A
+        CLR.W  (-14208).W                       ; $00FE60
+        CLR.W  (-14206).W                       ; $00FE64
+        CLR.W  (-32768).W                       ; $00FE68
+        CLR.W  (-32766).W                       ; $00FE6C
+        CLR.W  (-24558).W                       ; $00FE70
+        JSR     $008849AA                       ; $00FE74
+        MOVE.L  #$008BB4FC,(-13972).W           ; $00FE7A
+        MOVE.B  #$01,(-14327).W                 ; $00FE82
+        MOVE.B  #$01,(-14326).W                 ; $00FE88
+        BSET    #6,(-14322).W                   ; $00FE8E
+        MOVE.B  #$01,(-14334).W                 ; $00FE94
+        MOVE.W  #$0001,(-24522).W               ; $00FE9A
+        LEA     $00FF1000,A0                    ; $00FEA0
+        MOVE.W  #$037F,D0                       ; $00FEA6
+.clear_tilemap:
+        CLR.L  (A0)+                            ; $00FEAA
+        DBRA    D0,.clear_tilemap                    ; $00FEAC
+        MOVE.W  #$0001,D0                       ; $00FEB0
+        MOVE.W  #$0001,D1                       ; $00FEB4
+        MOVE.W  #$0001,D2                       ; $00FEB8
+        MOVE.W  #$0026,D3                       ; $00FEBC
+        MOVE.W  #$001A,D4                       ; $00FEC0
+        LEA     $00FF1000,A0                    ; $00FEC4
+        jsr     sh2_graphics_cmd(pc)    ; $4EBA $E360
+        LEA     $00FF1000,A0                    ; $00FECE
+        jsr     sh2_load_data(pc)       ; $4EBA $E41A
+        DC.W    $4EBA,$E2E2         ; JSR     $00E1BC(PC); $00FED8
+        BCLR    #7,MARS_VDP_MODE+1                    ; $00FEDC
+        LEA     $00FF6E00,A0                    ; $00FEE4
+        ADDA.L  #$00000160,A0                   ; $00FEEA
+        LEA     $008900A8,A1                    ; $00FEF0
+        MOVE.W  #$003F,D0                       ; $00FEF6
+.copy_palette_loop:
+        MOVE.W  (A1)+,D1                        ; $00FEFA
+        BSET    #15,D1                          ; $00FEFC
+        MOVE.W  D1,(A0)+                        ; $00FF00
+        DBRA    D0,.copy_palette_loop                    ; $00FF02
+        LEA     $000F3D80,A0                    ; $00FF06
+        MOVEA.L #$06014000,A1                   ; $00FF0C
+        DC.W    $4EBA,$E402         ; JSR     $00E316(PC); $00FF12
+        LEA     $000ECC90,A0                    ; $00FF16
+        MOVEA.L #$06019000,A1                   ; $00FF1C
+        DC.W    $4EBA,$E3F2         ; JSR     $00E316(PC); $00FF22
+        MOVEQ   #$00,D0                         ; $00FF26
+        MOVE.B  (-335).W,D0                     ; $00FF28
+        ADD.L  D0,D0                           ; $00FF2C
+        ADD.L  D0,D0                           ; $00FF2E
+        LEA     $00890084,A0                    ; $00FF30
+        MOVEA.L $00(A0,D0.W),A0                 ; $00FF36
+        MOVEA.L #$06019700,A1                   ; $00FF3A
+        DC.W    $4EBA,$E3D4         ; JSR     $00E316(PC); $00FF40
+        MOVEQ   #$00,D0                         ; $00FF44
+        MOVE.B  (-347).W,D0                     ; $00FF46
+        ADD.L  D0,D0                           ; $00FF4A
+        ADD.L  D0,D0                           ; $00FF4C
+        LEA     $00890090,A0                    ; $00FF4E
+        MOVEA.L $00(A0,D0.W),A0                 ; $00FF54
+        MOVEA.L #$06019C80,A1                   ; $00FF58
+        DC.W    $4EBA,$E3B6         ; JSR     $00E316(PC); $00FF5E
+        LEA     $000F4620,A0                    ; $00FF62
+        MOVEA.L #$0601A200,A1                   ; $00FF68
+        DC.W    $4EBA,$E3A6         ; JSR     $00E316(PC); $00FF6E
+        LEA     $000EBB40,A0                    ; $00FF72
+        MOVEA.L #$06020000,A1                   ; $00FF78
+        DC.W    $4EBA,$E396         ; JSR     $00E316(PC); $00FF7E
+        LEA     $000EB980,A0                    ; $00FF82
+        MOVEA.L #$06023200,A1                   ; $00FF88
+        DC.W    $4EBA,$E386         ; JSR     $00E316(PC); $00FF8E
+        LEA     $000F4E40,A0                    ; $00FF92
+        MOVEA.L #$06024000,A1                   ; $00FF98
+        DC.W    $4EBA,$E376         ; JSR     $00E316(PC); $00FF9E
+        MOVE.B  #$00,(-24544).W                 ; $00FFA2
+        MOVE.W  #$0041,(-24540).W               ; $00FFA8
+        MOVE.W  #$0000,(-24538).W               ; $00FFAE
+        MOVE.W  #$0000,(-24536).W               ; $00FFB4
+        MOVE.B  #$FF,(-24534).W                 ; $00FFBA
+        MOVE.B  #$00,(-24533).W                 ; $00FFC0
+        MOVE.B  #$01,(-24532).W                 ; $00FFC6
+        MOVE.B  #$00,(-24531).W                 ; $00FFCC
+        MOVE.W  #$000E,(-24530).W               ; $00FFD2
+        MOVE.W  #$004A,(-24528).W               ; $00FFD8
+        BTST    #0,(-24556).W                   ; $00FFDE
+        BEQ.W  .check_total_record                        ; $00FFE4
+        MOVEA.L (-24552).W,A0                   ; $00FFE8
+        MOVE.B  #$20,$0000(A0)                  ; $00FFEC
+        MOVE.B  #$20,$0001(A0)                  ; $00FFF2
+        MOVE.B  #$20,$0002(A0)                  ; $00FFF8
+.check_total_record:
+        BTST    #1,(-24556).W                   ; $00FFFE
+        BEQ.W  .finalize_display                        ; $010004
+        MOVEA.L (-24548).W,A0                   ; $010008
+        MOVE.B  #$20,$0000(A0)                  ; $01000C
+        MOVE.B  #$20,$0001(A0)                  ; $010012
+        MOVE.B  #$20,$0002(A0)                  ; $010018
+.finalize_display:
+        MOVE.B  #$01,(-14303).W                 ; $01001E
+        JSR     $0088204A                       ; $010024
+        ANDI.B  #$FC,MARS_VDP_MODE+1                  ; $01002A
+        ORI.B  #$01,MARS_VDP_MODE+1                   ; $010032
+        MOVE.W  #$8083,MARS_SYS_INTCTL                ; $01003A
+        BSET    #6,(-14219).W                   ; $010042
+        MOVE.W  (-14220).W,(A5)                 ; $010048
+        MOVE.W  #$0018,$00FF0008                ; $01004C
+        JSR     $00884998                       ; $010054
+        MOVE.B  #$92,(-14171).W                 ; $01005A
+        MOVE.W  #$0000,(-14210).W               ; $010060
+        MOVE.L  #$00890128,$00FF0002            ; $010066
+        BTST    #0,(-24556).W                   ; $010070
+        BNE.S  .done                        ; $010076
+        MOVE.L  #$00890148,$00FF0002            ; $010078
+.done:
+        RTS                                     ; $010082

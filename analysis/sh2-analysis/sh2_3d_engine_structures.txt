@@ -1,0 +1,435 @@
+=== COMPLETE DATA STRUCTURE ANALYSIS ===
+
+=== STRUCTURES BY REGISTER ===
+
+R0 Structure:
+  Size: ~0x13 bytes
+  Fields at offsets: ['0x00', '0x01', '0x02', '0x03', '0x04', '0x05', '0x06', '0x07', '0x08', '0x09', '0x0A', '0x0B', '0x0C', '0x0D', '0x0E', '0x0F']
+  All accesses:
+    +0x00: MOV.B   R0,@($0,R0)
+    +0x00: MOV.B   R0,@($0,R0)
+    +0x00: MOV.B   R0,@($0,R0)
+    +0x0A: MOV.B   R0,@($A,R0)
+    +0x0B: MOV.B   R0,@($B,R0)
+
+R1 Structure:
+  Size: ~0x34 bytes
+  Fields at offsets: ['0x00', '0x01', '0x02', '0x03', '0x04', '0x05', '0x06', '0x07', '0x08', '0x0E', '0x0F', '0x10', '0x20', '0x30']
+  All accesses:
+    +0x01: MOV.B   R0,@($1,R1)
+    +0x01: MOV.B   R0,@($1,R1)
+    +0x06: MOV.B   R0,@($6,R1)
+    +0x06: MOV.B   R0,@($6,R1)
+    +0x07: MOV.B   R0,@($7,R1)
+
+R3 Structure:
+  Size: ~0x14 bytes
+  Fields at offsets: ['0x00', '0x10']
+  All accesses:
+    +0x00: MOV.L   R0,@($0,R3)
+    +0x00: MOV.B   R0,@($0,R3)
+    +0x10: MOV.L   R1,@($10,R3)
+
+R4 Structure:
+  Size: ~0x13 bytes
+  Fields at offsets: ['0x00', '0x01', '0x02', '0x03', '0x08', '0x09', '0x0A', '0x0B', '0x0C', '0x0D', '0x0E', '0x0F']
+  All accesses:
+    +0x08: MOV.B   R0,@($8,R4)
+    +0x08: MOV.B   R0,@($8,R4)
+    +0x09: MOV.B   R0,@($9,R4)
+    +0x0A: MOV.B   R0,@($A,R4)
+    +0x0A: MOV.B   R0,@($A,R4)
+
+R5 Structure:
+  Size: ~0x1C bytes
+  Fields at offsets: ['0x00', '0x01', '0x02', '0x03', '0x04', '0x05', '0x06', '0x07', '0x08', '0x09', '0x0E', '0x0F', '0x14', '0x18']
+  All accesses:
+    +0x01: MOV.B   R0,@($1,R5)
+    +0x01: MOV.B   R0,@($1,R5)
+    +0x01: MOV.B   R0,@($1,R5)
+    +0x01: MOV.B   R0,@($1,R5)
+    +0x03: MOV.B   R0,@($3,R5)
+
+R6 Structure:
+  Size: ~0x20 bytes
+  Fields at offsets: ['0x00', '0x04', '0x0C', '0x10', '0x14', '0x1C']
+  All accesses:
+    +0x00: MOV.L   R3,@($0,R6)
+    +0x0C: MOV.L   @($C,R6),R4
+    +0x0C: MOV.L   @($C,R6),R4
+    +0x10: MOV.L   R7,@($10,R6)
+    +0x14: MOV.L   R0,@($14,R6)
+
+R7 Structure:
+  Size: ~0x10 bytes
+  Fields at offsets: ['0x00', '0x0C']
+  All accesses:
+    +0x00: MOV.L   R0,@($0,R7)
+    +0x0C: MOV.L   R4,@($C,R7)
+    +0x0C: MOV.L   R4,@($C,R7)
+    +0x0C: MOV.L   R4,@($C,R7)
+
+R8 Structure:
+  Size: ~0x34 bytes
+  Fields at offsets: ['0x00', '0x04', '0x08', '0x0C', '0x30']
+  All accesses:
+    +0x00: MOV.L   R0,@($0,R8)
+    +0x04: MOV.L   R1,@($4,R8)
+    +0x08: MOV.L   R0,@($8,R8)
+    +0x0C: MOV.L   R0,@($C,R8)
+    +0x30: MOV.L   R0,@($30,R8)
+
+R9 Structure:
+  Size: ~0x2C bytes
+  Fields at offsets: ['0x08', '0x0C', '0x28']
+  All accesses:
+    +0x08: MOV.L   @($8,R9),R0
+    +0x0C: MOV.L   R0,@($C,R9)
+    +0x28: MOV.L   R1,@($28,R9)
+
+R11 Structure:
+  Size: ~0x34 bytes
+  Fields at offsets: ['0x04', '0x08', '0x0C', '0x10', '0x30']
+  All accesses:
+    +0x04: MOV.L   R0,@($4,R11)
+    +0x04: MOV.L   R0,@($4,R11)
+    +0x08: MOV.L   R1,@($8,R11)
+    +0x0C: MOV.L   R2,@($C,R11)
+    +0x10: MOV.L   R3,@($10,R11)
+
+R12 Structure:
+  Size: ~0x40 bytes
+  Fields at offsets: ['0x0C', '0x1C', '0x2C', '0x3C']
+  All accesses:
+    +0x0C: MOV.L   @($C,R12),R0
+    +0x0C: MOV.L   @($C,R12),R0
+    +0x1C: MOV.L   @($1C,R12),R1
+    +0x2C: MOV.L   @($2C,R12),R2
+    +0x3C: MOV.L   @($3C,R12),R3
+
+R13 Structure:
+  Size: ~0x3C bytes
+  Fields at offsets: ['0x00', '0x04', '0x1C', '0x38']
+  All accesses:
+    +0x00: MOV.L   R5,@($0,R13)
+    +0x04: MOV.L   R7,@($4,R13)
+    +0x1C: MOV.L   @($1C,R13),R7
+    +0x38: MOV.L   R1,@($38,R13)
+
+R14 Structure:
+  Size: ~0x38 bytes
+  Fields at offsets: ['0x04', '0x08', '0x0C', '0x10', '0x14', '0x18', '0x1C', '0x20', '0x24', '0x28', '0x2C', '0x30', '0x34']
+  All accesses:
+    +0x20: MOV.L   @($20,R14),R12
+    +0x24: MOV.L   R11,@($24,R14)
+    +0x24: MOV.L   @($24,R14),R11
+    +0x2C: MOV.L   @($2C,R14),R10
+    +0x2C: MOV.L   @($2C,R14),R10
+
+
+=== ALL LOOPS ===
+
+Loop at 0x02223014:
+  Body size: 4 bytes
+  Counter: R7
+
+Loop at 0x0222310A:
+  Body size: 8 bytes
+  Counter: R11
+
+Loop at 0x02223198:
+  Body size: 8 bytes
+  Counter: R11
+
+Loop at 0x0222325E:
+  Body size: 60 bytes
+  Counter: R7
+
+Loop at 0x022232E2:
+  Body size: 4 bytes
+  Counter: R7
+  Stride: 0x0C bytes
+
+Loop at 0x02223300:
+  Body size: 14 bytes
+  Counter: R7
+  Stride: 0x40 bytes
+
+Loop at 0x02223338:
+  Body size: 4 bytes
+  Counter: R7
+
+Loop at 0x02223352:
+  Body size: 4 bytes
+  Counter: R7
+
+Loop at 0x02223398:
+  Body size: 8 bytes
+  Counter: R7
+  Stride: 0xFC bytes
+
+Loop at 0x022233E8:
+  Body size: 88 bytes
+  Counter: R7
+  Stride: 0xF0 bytes
+
+Loop at 0x02223402:
+  Body size: 10 bytes
+  Counter: R7
+  Stride: 0xFC bytes
+
+Loop at 0x02223442:
+  Body size: 74 bytes
+  Counter: R7
+  Stride: 0xE0 bytes
+
+Loop at 0x0222345E:
+  Body size: 8 bytes
+  Counter: R7
+  Stride: 0xFC bytes
+
+Loop at 0x02223496:
+  Body size: 64 bytes
+  Counter: R7
+  Stride: 0xE0 bytes
+
+Loop at 0x022234B6:
+  Body size: 20 bytes
+  Counter: R0
+
+Loop at 0x022234E4:
+  Body size: 22 bytes
+  Counter: R7
+  Stride: 0x10 bytes
+
+Loop at 0x022239BE:
+  Body size: 4 bytes
+  Counter: R7
+  Stride: 0x0C bytes
+
+Loop at 0x02223A4A:
+  Body size: 0 bytes
+  Counter: R7
+
+Loop at 0x02223A5C:
+  Body size: 4 bytes
+  Counter: R7
+
+Loop at 0x02223B2C:
+  Body size: -60 bytes
+  Counter: R6
+
+Loop at 0x02223B68:
+  Body size: 68 bytes
+  Counter: R7
+
+Loop at 0x02223C58:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02223C92:
+  Body size: 0 bytes
+  Counter: R0
+  Stride: 0xFF bytes
+
+Loop at 0x02223CD0:
+  Body size: 26 bytes
+  Counter: R7
+
+Loop at 0x02223D0C:
+  Body size: 8 bytes
+  Counter: R2
+
+Loop at 0x02223D12:
+  Body size: 18 bytes
+  Counter: R7
+  Stride: 0x08 bytes
+
+Loop at 0x02223FDC:
+  Body size: 0 bytes
+  Counter: R6
+
+Loop at 0x02223FEA:
+  Body size: 30 bytes
+  Counter: R7
+
+Loop at 0x02224048:
+  Body size: 8 bytes
+  Counter: R2
+
+Loop at 0x02224050:
+  Body size: 20 bytes
+  Counter: R7
+  Stride: 0x08 bytes
+
+Loop at 0x02224078:
+  Body size: 22 bytes
+  Counter: R7
+
+Loop at 0x022241C2:
+  Body size: 10 bytes
+  Counter: R11
+
+Loop at 0x022241FC:
+  Body size: 8 bytes
+  Counter: R7
+
+Loop at 0x02224292:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224298:
+  Body size: 12 bytes
+  Counter: R7
+  Stride: 0x02 bytes
+
+Loop at 0x022242C2:
+  Body size: 4 bytes
+  Counter: R0
+
+Loop at 0x022242CA:
+  Body size: 18 bytes
+  Counter: R7
+  Stride: 0x02 bytes
+
+Loop at 0x022242EA:
+  Body size: 2 bytes
+  Counter: R7
+
+Loop at 0x0222430C:
+  Body size: 6 bytes
+  Counter: R7
+
+Loop at 0x02224318:
+  Body size: 0 bytes
+  Counter: R7
+
+Loop at 0x022244A0:
+  Body size: 4 bytes
+  Counter: R7
+
+Loop at 0x0222450A:
+  Body size: 0 bytes
+  Counter: R7
+
+Loop at 0x02224518:
+  Body size: 26 bytes
+  Counter: R3
+  Stride: 0x01 bytes
+
+Loop at 0x02224540:
+  Body size: 8 bytes
+  Counter: R6
+
+Loop at 0x02224544:
+  Body size: 14 bytes
+  Counter: R7
+
+Loop at 0x0222455A:
+  Body size: 2 bytes
+  Counter: R7
+
+Loop at 0x022245BA:
+  Body size: 196 bytes
+  Counter: R3
+
+Loop at 0x02224608:
+  Body size: 16 bytes
+  Counter: R7
+  Stride: 0x10 bytes
+
+Loop at 0x0222467A:
+  Body size: 4 bytes
+  Counter: R7
+
+Loop at 0x0222468A:
+  Body size: 4 bytes
+  Counter: R7
+  Stride: 0x02 bytes
+
+Loop at 0x02224B92:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224BF2:
+  Body size: 24 bytes
+  Counter: R1
+
+Loop at 0x02224C22:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224CCA:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224CDC:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224CE8:
+  Body size: 4 bytes
+  Counter: R6
+
+Loop at 0x02224D7E:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224DBC:
+  Body size: 8 bytes
+  Counter: R3
+  Stride: 0x01 bytes
+
+Loop at 0x02224DCA:
+  Body size: 6 bytes
+  Counter: R3
+  Stride: 0x01 bytes
+
+Loop at 0x02224DDC:
+  Body size: 6 bytes
+  Counter: R3
+
+Loop at 0x02224DF2:
+  Body size: 10 bytes
+  Counter: R3
+
+Loop at 0x02224E08:
+  Body size: 10 bytes
+  Counter: R3
+
+Loop at 0x02224E20:
+  Body size: 10 bytes
+  Counter: R3
+
+Loop at 0x02224E9E:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224EBE:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224EDE:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224EFE:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224F1E:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224F46:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224F5C:
+  Body size: 2 bytes
+  Counter: R0
+
+Loop at 0x02224FC2:
+  Body size: 2 bytes
+  Counter: R0
+

@@ -1,0 +1,89 @@
+; ============================================================================
+; FM Channel Stop Register Map + Stop All — silence all active channels
+; ROM Range: $030936-$0309F2 (188 bytes)
+; ============================================================================
+; Data prefix: channel struct pointer table (used alongside $030852 table).
+; Code at $03094E: Clears sound priority (A6+$00), writes key-off all
+; (reg $27, data $00) via fm_write_wrapper. Iterates 6 effect channels
+; at A6+$0220 ($30-byte stride). For each active channel:
+;   FM (positive type): calls fm_init_channel, resolves channel struct
+;     via $030852 table, clears key-off and sets mute flag, calls $0312E8.
+;   PSG (negative type): calls fm_set_volume, resolves channel struct,
+;     clears/mutes. $E0 type writes PSG silence byte from +$25.
+;
+; Entry: A6 = sound driver state pointer
+; Uses: D0, D1, D3, D4, D6, A0, A1, A3, A5
+; Calls:
+;   $030C8A: fm_init_channel
+;   $030CBA: fm_write_wrapper
+;   $030FB2: fm_set_volume
+; Confidence: high
+; ============================================================================
+
+fm_channel_stop_reg_map_stop_all:
+        DC.W    $00FF                           ; $030936
+        or.b    d0,d3                   ; $8600
+        DC.W    $00FF                           ; $03093A
+        DIVU    -$01(A0,D0.W),D3                ; $03093C
+        OR.W   D3,(A0)                          ; $030940
+        DC.W    $00FF                           ; $030942
+        OR.B   (A0),D4                          ; $030944
+        DC.W    $00FF                           ; $030946
+        or.w    d0,d4                   ; $8840
+        DC.W    $00FF                           ; $03094A
+        DC.W    $8870                           ; $03094C
+        CLR.B  $0000(A6)                        ; $03094E
+        MOVEQ   #$27,D0                         ; $030952
+        MOVEQ   #$00,D1                         ; $030954
+        jsr     fm_write_wrapper(pc)    ; $4EBA $0362
+        LEA     $0220(A6),A5                    ; $03095A
+        MOVEQ   #$05,D6                         ; $03095E
+.channel_loop:
+        TST.B  (A5)                             ; $030960
+        BPL.W  .next_channel                    ; $030962
+        BCLR    #7,(A5)                         ; $030966
+        MOVEQ   #$00,D3                         ; $03096A
+        MOVE.B  $0001(A5),D3                    ; $03096C
+        BMI.S  .psg_path                        ; $030970
+        jsr     fm_init_channel(pc)     ; $4EBA $0316
+        CMPI.B  #$04,D3                         ; $030976
+        BNE.S  .resolve_fm_channel              ; $03097A
+        TST.B  $0340(A6)                        ; $03097C
+        BPL.S  .resolve_fm_channel              ; $030980
+        LEA     $0340(A6),A5                    ; $030982
+        MOVEA.L $0034(A6),A1                    ; $030986
+        BRA.S  .clear_keyoff_set_mute           ; $03098A
+.resolve_fm_channel:
+        SUBQ.B  #2,D3                           ; $03098C
+        LSL.B  #2,D3                            ; $03098E
+        lea     fm_channel_pointer_table_sfx_loader(pc),a0; $41FA $FEC0
+        MOVEA.L A5,A3                           ; $030994
+        MOVEA.L $00(A0,D3.W),A5                 ; $030996
+        MOVEA.L $0030(A6),A1                    ; $03099A
+.clear_keyoff_set_mute:
+        BCLR    #2,(A5)                         ; $03099E
+        BSET    #1,(A5)                         ; $0309A2
+        MOVE.B  $000B(A5),D0                    ; $0309A6
+        jsr     fm_instrument_reg_write+52(pc); $4EBA $093C
+        MOVEA.L A3,A5                           ; $0309AE
+        BRA.S  .next_channel                    ; $0309B0
+.psg_path:
+        jsr     psg_set_pos_silence+16(pc); $4EBA $05FE
+        LEA     $0370(A6),A0                    ; $0309B6
+        CMPI.B  #$E0,D3                         ; $0309BA
+        BEQ.S  .clear_psg_keyoff                ; $0309BE
+        CMPI.B  #$C0,D3                         ; $0309C0
+        BEQ.S  .clear_psg_keyoff                ; $0309C4
+        LSR.B  #3,D3                            ; $0309C6
+        lea     fm_channel_pointer_table_sfx_loader(pc),a0; $41FA $FE88
+        MOVEA.L $00(A0,D3.W),A0                 ; $0309CC
+.clear_psg_keyoff:
+        BCLR    #2,(A0)                         ; $0309D0
+        BSET    #1,(A0)                         ; $0309D4
+        CMPI.B  #$E0,$0001(A0)                  ; $0309D8
+        BNE.S  .next_channel                    ; $0309DE
+        MOVE.B  $0025(A0),PSG             ; $0309E0
+.next_channel:
+        ADDA.W  #$0030,A5                       ; $0309E8
+        DBRA    D6,.channel_loop                 ; $0309EC
+        RTS                                     ; $0309F0

@@ -1,0 +1,572 @@
+# KNOWN_ISSUES — Pitfalls, Bugs, and Gotchas
+
+Lessons learned across sessions. **Read this before modifying code.**
+
+---
+
+## 68K Assembly Translation
+
+### ASL vs LSL — Different Opcodes
+- `ASL.L #4,D0` = $E980 (type bits 4-3 = 00)
+- `LSL.L #4,D0` = $E988 (type bits 4-3 = 01)
+- Both shift left identically, but encode differently and have different flag behavior
+- Original code uses LSL for logical shifts — **always verify against ROM bytes**
+
+### BSR.W vs JSR (d16,PC) — Different Opcodes
+- `BSR.W label` = $6100 + displacement
+- `JSR label(pc)` = $4EBA + displacement
+- VRD uses `JSR (d16,PC)` for intra-section subroutine calls
+- **Fix:** Use `jsr label(pc)` syntax in vasm to get the $4EBA encoding
+
+### Indexed vs Displacement Addressing — Easy to Confuse
+- `dc.w $31BC,$0000,$2000` is **NOT** `move.w #$0000,$2000(a0)` (d16,An mode 5)
+- It IS `move.w #$0000,(a0,d2.w)` (d8,An,Xn mode 6) — $2000 is the extension word
+- Extension word $2000 = D2.W index register, displacement $00
+- The disassembler may show these as `$2000(A0)` which is misleading
+- **Rule:** When translating dc.w with 3+ words, decode the addressing mode bits before choosing mnemonic syntax
+
+### vasm BSR.W — Displacement Off by +2 (Project-Wide Bug)
+vasm's `bsr.w` generates a displacement 2 bytes too large:
+- vasm computes: `target - (instr_addr + 2)` (wrong)
+- 68K executes: `(instr_addr + 4) + displacement` (PC base = instr_addr+4 for BSR.W)
+- Result: every `bsr.w` lands at `target+2` instead of `target`
+
+**Never use `bsr.w` in new code.** Alternatives:
+- `bsr.s label` — for targets within ±127 bytes (always correct, shorter)
+- `jsr label+$880000` — for cross-function calls to labels in the `org $01C200` section
+- `jsr label` — only when `label` is an absolute `equ` constant
+
+Root cause of B-007: `bsr.w fps_render` landed at `fps_render+2` ($FCE0 = Line-F
+trigger), causing a Line-F exception on every call instead of rendering.
+
+### m68k_disasm.py Known Bugs
+The project disassembler (`tools/m68k_disasm.py`) has these confirmed issues:
+- **ASL/LSL:** Shift count field 000 means 8, not 0 (shows wrong count)
+- **EXT.L** ($48C0): Confused with MOVEM.L when followed by certain words
+- **CLR.W** ($4268): Decoded as CLR.B (size bits 01=word decoded as byte)
+- **DIVS.W** ($81Cx): Shown as "OR" (opcode line 8 misidentified)
+- **ADDQ** ($52xx): Sometimes shown as SUBQ
+- **BSR target address:** Computed incorrectly (uses wrong PC base)
+- **Multi-word instructions:** Extension words sometimes parsed as new opcodes
+
+**Rule:** Always verify disassembler output against ROM hex bytes for critical code.
+
+---
+
+## SH2 Assembly Translation
+
+### Assembler Padding Causes Size Mismatches
+`sh-elf-as` adds implicit alignment padding not present in the original ROM.
+- Even 1-byte mismatch causes section overlap errors in the fixed ROM layout
+- **Workaround:** Use `.short` raw hex opcodes instead of mnemonics (bypasses padding entirely)
+- main_coordinator_short and case_handlers_short were blocked by this but now integrated using `_short.asm` format
+
+### When to Keep SH2 as dc.w
+- Functions with external BSR calls requiring symbol resolution
+- Any function where byte-perfect size matching is required
+- **Safe to translate:** Self-contained leaf functions, small (26-32 bytes), no PC-relative data
+- **For larger functions:** Use `.short` hex format with annotated comments
+
+### SH2 gas `.align N` — Power-of-2 Semantics
+On SH2, `sh-elf-as` uses **power-of-2** alignment, NOT byte count:
+- `.align 1` = 2^1 = **2-byte alignment** (for .word data)
+- `.align 2` = 2^2 = **4-byte alignment** (for .long data, standard for code sections)
+- `.align 4` = 2^4 = **16-byte alignment** (excessive for most literal pools!)
+
+**Discovered (B-004, Feb 2026):** Using `.align 4` before a `.long` literal pool generated 16-byte alignment padding, inflating a 60-byte handler to 80 bytes and shifting all PC-relative displacements. Fix: use `.align 2` for longword data.
+
+**Rule:** For SH2 literal pools: `.align 1` before `.word`, `.align 2` before `.long`.
+
+### SH2 gas MOV @(disp,Rm) — Byte Offsets, Not Scaled
+The SH2 assembler (`sh-elf-as`) uses **byte offsets** for `MOV.W @(disp,Rm)` and `MOV.L @(disp,Rm)` instructions:
+- `mov.w @(2,r8),r0` → EA = R8 + 2 (byte offset). Assembler stores disp/2=1 in the opcode.
+- `mov.l @(4,r8),r0` → EA = R8 + 4 (byte offset). Assembler stores disp/4=1 in the opcode.
+
+**Wrong:** `mov.w @(1,r8),r0` → Error "misaligned offset" (1 is not a multiple of 2)
+**Wrong:** `mov.l @(1,r8),r0` → Error "misaligned offset" (1 is not a multiple of 4)
+
+The opcode encoding stores a SCALED displacement (divided by the access size), but the assembler syntax takes the ACTUAL byte offset. Don't confuse the two when translating from raw opcodes.
+
+**COMM register byte offsets from R8=$20004020:**
+| Register | SH2 Address | Byte Offset | MOV.W syntax | MOV.L syntax |
+|----------|-------------|-------------|-------------|-------------|
+| COMM1 | $20004022 | 2 | `@(2,r8)` | — |
+| COMM2:3 | $20004024 | 4 | — | `@(4,r8)` |
+| COMM4:5 | $20004028 | 8 | — | `@(8,r8)` |
+| COMM6 | $2000402C | 12 | `@(12,r8)` | — |
+| COMM7 | $2000402E | 14 | `@(14,r8)` | — |
+
+### All SH2 Functions Now Integrated
+All 92 SH2 function IDs (data_copy–poll_copy_short) are accounted for via 89 `.inc` files:
+- **74 function groups** in individual/combined `.inc` files (46 use `.short` format, 28 use mnemonics)
+- **12 expansion ROM** `.inc` files (batch_copy_handler, cmd22_single_shot, etc.)
+- **2 numbering gaps**: func_035 (no address space between span_filler_short/036), func_064 (none between unrolled_copy_short/065)
+- **4 subsumed IDs**: func_056-059 covered by unrolled_copy_short+065 range
+- **4 doc-only IDs**: func_060-063 in `raster_batch.asm` (DOCUMENTATION ONLY, addresses covered by offset_bsr_short-054)
+- **2 merged IDs**: func_027/028 are shared exit paths within bounds_compare_short.inc
+
+### Translation Checklist
+1. Test immediately after each function translation
+2. Use `.short` format for functions with external BSR calls or alignment-sensitive code
+3. Verify assembled byte size matches expected before integration
+
+---
+
+## Hardware Hazards
+
+### RV Bit — SH2 ROM Access Stalls (RESOLVED — Not a Risk for VRD)
+When RV=1 (68K ROM→VRAM DMA active), **ALL SH2 ROM access blocks** until 68K clears it.
+- **Risk:** Expansion ROM at $02300000+ would stall during DMA transfers
+- **Status:** RESOLVED (B-008, 2026-02-16) — VRD never sets RV=1. All DREQ_CTRL writes use `#$04` (68S mode only). The game uses manual FIFO feeding, not ROM-to-VRAM DMA. Expansion ROM is safe for SH2 execution at all times.
+- **No mitigation needed.** SDRAM copy is unnecessary.
+
+### FM Bit — Immediate VDP Preemption
+Writing FM=1 **immediately preempts** any ongoing 68K VDP access, even mid-transfer.
+- **Risk:** VRAM/CRAM/VSRAM corruption if switched during active 68K VDP operation
+- **Mitigation:** Only switch FM during V-Blank when VDP is idle
+- **Hardware Manual:** "access authorisation is forced to switch to the SH2 side, even if access of VDP is in progress in the MEGA Drive side"
+
+### COMM Register Races — Read-During-Write Is Also Undefined
+
+The hardware manual (Section 3.3) states:
+
+> "If simultaneously writing the same register from both the 68000 and SH2, **or if either the 68000 or SH2 is writing while the other is reading**, the value of that register becomes undefined."
+
+This is **three hazard cases**, not just one:
+
+| Scenario | Result |
+|----------|--------|
+| 68K writes + SH2 writes same register | **Undefined** |
+| 68K writes + SH2 reads same register | **Undefined** |
+| SH2 writes + 68K reads same register | **Undefined** |
+
+Only read + read is safe without synchronization. All protocols must sequence accesses via handshakes on a DIFFERENT register.
+
+- COMM7 ($2000402E): Master→Slave signal (unidirectional — safe)
+- COMM5 ($2000402A): Vertex transform counter (verify write direction)
+
+**Full reference:** [COMM_REGISTERS_HARDWARE_ANALYSIS.md](analysis/COMM_REGISTERS_HARDWARE_ANALYSIS.md)
+
+### SH2 Write Buffer — COMM Writes Are Asynchronous
+
+The SH7604 has a 1-level write buffer (SH7604 manual §7.11.2). After `mov.w r6,@r8` (write to COMM0), the SH2 CPU moves to the next instruction **before the write reaches the physical register**. The 68K may not see the new value immediately.
+
+**Synchronization pattern:** Dummy-read the same address after writing to force the write buffer to flush:
+
+```asm
+mov.w   r6,@r8          ; Write to COMM register
+mov.w   @r8,r6          ; Dummy read — forces write completion
+; Now 68K is guaranteed to see the new value
+```
+
+This pattern is also required for interrupt clear registers (see supplement-2 sample code).
+
+### COMM1 Is a System Signal Register — Do Not Repurpose
+
+COMM1 (`$A15122`/`$20004022`) has multiple system-wide roles in VRD:
+
+| Consumer | What It Reads | How |
+|----------|--------------|-----|
+| **hw_init_short** (Master SH2) | Clears COMM0:1 via longword zero, then sets COMM1_LO bit 0 | "command done" signal |
+| **V-INT handler** (68K) | `btst #0,COMM1_LO` | Checks SH2 completion |
+| **Scene init** (68K) | `btst #0,COMM1_LO` wait loop | Waits for SH2 ready |
+| **Frame swap** (68K) | `btst #0,COMM1_LO` | Checks SH2 state |
+| **VDP operations** (68K) | COMM1_LO bits 0 and 1 | Handshake signals |
+| **Race scene init** (68K) | `move.b #$04,COMM1_HI` | 2-player mode flag |
+| **Slave SH2 dispatcher** | Byte at `$20004024` (COMM2_HI) | Polls for Slave work (non-zero = dispatch) |
+
+Writing arbitrary data (e.g., a height parameter) to COMM1 corrupts ALL of these signals simultaneously. If COMM1 must be used for parameter passing, protect it with:
+1. Disable 68K interrupts (`ori.w #$0700,sr`) to prevent V-INT from reading corrupted value
+2. Save COMM1 before writing (`move.w COMM1,-(sp)`)
+3. Wait for SH2 to consume the parameter (handshake on a different register)
+4. Restore COMM1 before re-enabling interrupts
+
+**Note:** The Slave SH2 polls COMM2_HI (`$20004024`), not COMM1. Writing to COMM2 (e.g., source pointer high byte) while Slave is in command_loop may cause spurious dispatch. (B-004 v5 is COMM1-safe but has a narrow COMM2 race window — not observed in testing.)
+
+### CMDINT vs Other Interrupts
+Most interrupts (VRES, VINT, HINT, PWMINT) persist until explicitly cleared. CMDINT behaves differently:
+- CMDINT is **negated when masked**, re-asserted when unmasked if condition still exists
+- Acts as level-triggered with mask-sensitive behavior (reliable for queue signaling)
+- Missing interrupt clear = handler fires only once, then stops (for non-CMD interrupts)
+- Clear registers: VRES=$20004014, V=$20004016, H=$20004018, CMD=$2000401A, PWM=$2000401C
+
+### COMM Register Mislabeling in Legacy Code
+Two COMM registers were mislabeled as "COMM3" in different files:
+- `comm_transfer_block.asm`: `$A15123` was called "COMM3" — actually **COMM1_LO** (COMM1 low byte). Fixed in 3b347d3.
+- `adapter_init.asm`: `$A1512C` was called "COMM3" — actually **COMM6** (handshake flag). Fixed in 350e346.
+- **Rule:** Always verify COMM register identity against the byte map: COMM0=$A15120, COMM1=$A15122, ..., COMM7=$A1512E. Byte access adds 0 (HI) or 1 (LO) to the word address.
+
+### DREQ Registers Mislabeled as Bank Registers
+`adapter_init.asm` originally labeled `$A1510A` as `ADAPTER_BANK` and `$A1510C` as `ADAPTER_BANKDAT`. These are actually **DREQ Source Address Low** and **DREQ Destination Address High** respectively (see 32X Hardware Manual §4.3).
+- The code at adapter_init lines 117-126 configures DREQ, **not** ROM banking
+- Fixed in this session: renamed to `ADAPTER_DREQ_SL` / `ADAPTER_DREQ_DH`
+- **Actual bank register candidates:** `$A130F1` (Genesis standard, byte write) and `$A15104` (32X Bank Set Register, word write, bits 0-1)
+
+### Bank Register Probe — Access Path Unresolved
+A boot-time probe at [bank_probe.asm](disasm/modules/68k/optimization/bank_probe.asm) tests three 68K access paths to expansion ROM ($300000-$3FFFFF):
+- **Direct** (`$300000`): Works if 32X maps full 4MB at $000000-$3FFFFF
+- **Bank A** (`$A130F1`): Genesis standard bank register, bank 3 → $900000 window
+- **Bank B** (`$A15104`): 32X Bank Set Register, bank 3 → $900000 window
+- Results written to Work RAM `$FFFFF080` (28 bytes): signature "PROB", test values, winner code ('D'/'A'/'B'/'?'), completion marker $DEAD
+- **Status:** Probe integrated into boot sequence, ROM builds. Awaiting PicoDrive test to read results.
+- **Do not hardcode a bank register** until probe results confirm which path works
+
+### SH2 Cannot Access 68K Work RAM — At ANY Address
+The SH2 memory map (hardware manual §4.2) shows:
+- `$0200 0000h` — SDRAM (256KB, ends at `$0203 FFFF`)
+- `$0240 0000h` — **"-" (NOTHING)** — unmapped space
+- `$0400 0000h` — Frame Buffer DRAM
+
+68K Work RAM lives at 68K address `$FF0000-$FFFFFF`. There is **NO SH2 address** that maps to this region. Both `$02FFFB00` and `$22FFFB00` fall in the unmapped gap between SDRAM and Frame Buffer.
+
+**Failed approaches (B-003 v1-v3):**
+- `$22FFFB00` (cache-through) — unmapped, reads as garbage
+- `$02FFFB00` (cached) — same unmapped region, same result
+- `$06FFFB00` (SDRAM mirror on PicoDrive) — not documented, not portable
+
+**Correct approach:** Use COMM registers ($20004020-$2000402E) for parameter passing between 68K and SH2. These 8 words are the ONLY always-accessible shared writable memory between the two CPUs.
+
+**Rule:** NEVER use 68K Work RAM addresses in SH2 code. The only shared memory options are:
+1. **COMM registers** (16 bytes, always accessible)
+2. **SDRAM** ($0200 0000 - $0203 FFFF, both CPUs can access)
+3. **Frame Buffer** ($0400 0000 / $2400 0000, access controlled by FM bit)
+
+### Cache-Through Addressing for Shared Memory
+Use `0x22XXXXXX` (cache-through), not `0x0XXXXXXX` (cached) for:
+- System registers (COMM, control registers)
+- VDP registers
+- Any memory modified by another CPU or DMA
+- Shared memory between Master/Slave SH2
+
+Otherwise: stale cached values → subtle data corruption. Parameter block at $2203E000 already uses cache-through (correct).
+
+### SH2 Interrupt Hardware Bug
+Original SH2 silicon has a documented bug (see [32x-hardware-manual-supplement-2.md](docs/32x-hardware-manual-supplement-2.md)):
+- FRT TOCR toggle required in every interrupt handler
+- Only use interrupt levels 14, 12, 10, 8, 6
+- 2+ cycle wait after interrupt clear before RTE
+- No VDP access in H-interrupt during DMA
+
+---
+
+## SH2 Patch Design
+
+### COMM7 Signal Namespace Collision — Don't Broadcast Game Commands
+
+**Status:** Root cause of race-mode crash in B-006 activation (commits 651a415, 7bab6fc). **Fixed in B-003** (2026-02-14) by activating the async infrastructure correctly.
+
+The `master_dispatch_hook` (B-006 Patch #2) was designed to write every game command byte to COMM7 so the Slave could "see" what the Master was dispatching. This is fundamentally wrong because **game command codes overlap with expansion ROM signal values**:
+
+| Value | Game meaning | Expansion meaning | Collision? |
+|-------|-------------|-------------------|------------|
+| 0x01 | Frame init | Frame sync signal | **YES** |
+| 0x16 | Vertex transform | Vertex transform signal | Skipped (by design) |
+| 0x27 | Pixel region fill (21×/frame) | Queue drain signal | **YES — CRASH** |
+
+The Slave's `slave_work_wrapper` interprets COMM7 values as expansion ROM signals. When the hook writes `COMM7 = 0x27` (from a normal game cmd), the Slave calls `cmd27_queue_drain`, which reads from uninitialized Work RAM at `$02FFFB00` — garbage pointers, widths, heights → writes to random memory → corruption → crash with stuck engine sound.
+
+**Rules:**
+1. **Never broadcast raw game command bytes to COMM7.** The game's command namespace and the expansion ROM's signal namespace are independent; conflating them causes collisions.
+2. **Only write COMM7 from code that knows the Slave's signal protocol.** Currently: `sh2_cmd_27` async enqueue (COMM7=$0027 when queue has work).
+3. **Don't activate signal consumers (queue drain) before their producers (async queue) exist.** Infrastructure without data = garbage processing.
+4. **A dispatch hook that only dispatches is pointless overhead.** If the hook doesn't add behavior beyond what the original code does, don't have a hook.
+
+**B-003 Implementation (Feb 2026):**
+- 68K writes COMM7=$0027 ONLY from `sh2_cmd_27` enqueue (after queueing valid entry)
+- Slave checks COMM7 in idle loop (expansion handler at $300700)
+- Queue initialized to zero at boot (covered by Work RAM clear)
+- No namespace collision: COMM7 is written by async producer, not by generic dispatch hook
+
+**Fix:** Revert Patch #2 entirely. The original Master dispatch at `$02046A` works correctly. COMM7 signaling for cmd 0x16 is already handled by `shadow_path_wrapper` (Patch #3), which writes COMM7 only when vertex transform parameters are ready.
+
+### B-006 Patch #2 Had Three Independent Bugs (Committed in 651a415)
+
+The committed `master_dispatch_hook` trampoline at `$02046A` had three bugs beyond the COMM7 design flaw:
+
+1. **R0 clobbered before hook reads it.** `D005` (MOV.L hook_addr,**R0**) overwrites the command byte that the hook needs. Fix: use R1 for the hook address (`D102`).
+
+2. **Literal pool collision at `$020480`.** The hook's literal (0x02300050) was placed at `$020480`, which is also the target of `D011` at `$020438` (Master SH2 init code). This made the init code JSR to the hook address instead of `0x060045CC`. Fix: place literal at `$020474` (dead code area after the BRA), restore `$020480` to original value.
+
+3. **COMM7 broadcast (the crash).** Described above. Writing every game command to COMM7 triggers uninitialized queue drain on the Slave.
+
+**Lesson:** When patching SH2 code, always check whether literal pool addresses are shared by other `MOV.L @(disp,PC)` instructions in the surrounding code. SH2 literal pools are positional — moving code can silently redirect other instructions' data loads.
+
+### SH2 Literal Pool Sharing — Verify Before Overwriting
+
+SH2 `MOV.L @(disp,PC),Rn` instructions reference literal pools by PC-relative offset. Multiple instructions can share the same literal. When patching code, verify with:
+
+```python
+# Find all MOV.L @(disp,PC) that reference a given address
+target = 0x020480  # address being overwritten
+for addr in range(section_start, section_end, 2):
+    opcode = read_word(addr)
+    if (opcode & 0xF000) == 0xD000:  # MOV.L @(disp,PC),Rn
+        disp = (opcode & 0xFF) * 4
+        pc = (addr + 4) & ~3
+        ea = pc + disp
+        if ea == target:
+            print(f"WARNING: ${addr:06X} also loads from ${target:06X}")
+```
+
+**Rule:** Before placing a literal at any address, scan the entire section for `$Dnxx` opcodes that resolve to that address.
+
+### Successful Pattern: SH2 State Machine Relocation via Expansion ROM (S-6)
+
+When SH2 functions are tightly coupled (cross-function branching, shared delay slots, state machine semantics), individual call-site modification is infeasible. Instead, **relocate the entire block** to expansion ROM:
+
+1. Copy the full state machine block (e.g., func_017-019, 278 bytes) to expansion ROM
+2. Inline the target function (e.g., coord_transform) at each BSR call site within the block
+3. Convert external BSR calls (to functions outside the block) to `MOV.L literal,Rn` + `JSR @Rn` (uses shared literal pool)
+4. Recalculate ALL branch displacements within the relocated block
+5. Place JMP trampolines at each original entry point (6 bytes each: `MOV.L @(disp,PC),Rn` + `JMP @Rn` + literal)
+6. Verify: 3600-frame PicoDrive autoplay
+
+**Key constraints:**
+- Expansion ROM is SH2-executable only — use `dc.w` raw opcodes, never 68K mnemonics
+- Branch displacement recalculation is error-prone — verify every `BT`/`BF`/`BRA`/`BSR` target manually
+- Literal pools must be placed at even addresses after the code block (`.align 2`)
+- External function calls via `JSR @Rn` can share a single literal pool entry
+
+**Proven in S-6 (March 2026):** func_017-019 relocated to expansion $301300 (388B), coord_transform inlined at 3 sites, 8 external BSR→MOV.L+JSR, 20 branch displacements recalculated, 6 JMP trampolines. ~19,200 cycles/frame saved (~5% Slave SH2).
+
+### Reverting SH2 dc.w — Literal Pool Values Must Be Byte-Verified
+
+When reverting SH2 code sections that contain literal pools (data words following code), the pool values must be restored from the original ROM bytes — **never reconstructed from memory or assumed to be NOPs**.
+
+**Root cause (2026-02-20):** A revert of B-004 replaced literal pool words at `$0251F0/$0251F2` with `$0009, $0009` (which look like NOP opcodes) instead of the correct `$0600, $43F0` (`hw_init_short` pointer). The `JSR @R0` that loads this literal then jumped to `$00090009` (unmapped) → crash on every `sh2_send_cmd` call, earlier than the original bug.
+
+**Rule:** For every address being restored, grep the original ROM hex dump or the pre-patch git commit for the exact byte values. Do not trust manual reconstruction of literal pools.
+
+### Slave SH2 Idle Loop at $0203CC — Context and Constraints
+
+The original Slave idle loop at `$0203CC` is:
+```
+$0203CC: D101  MOV.L @(4,PC),R1   ; R1 = 0x2000402C (COMM6)
+$0203CE: 2102  MOV.L R0,@R1       ; COMM6 = R0 (boot-complete signal)
+$0203D0: AFFE  BRA $0203D0        ; Loop forever
+$0203D2: 0009  NOP
+$0203D4: 2000 402C               ; COMM6 address literal
+```
+
+This is a **terminal idle loop**, not the Slave's main dispatch. The Slave's rendering dispatch loop is at `$06000608` in SDRAM (confirmed by profiling hotspot at `$0600060A`). The Slave reaches `$0203CC` once during boot, writes a status value to COMM6, and spins forever. Rendering work arrives via **interrupts**, not by breaking out of this loop.
+
+**Implication for Patch #1:** Replacing this loop with `slave_work_wrapper` (COMM7 polling) is safe for rendering — the interrupt-driven SDRAM dispatch continues to handle COMM1 commands. The COMM7 poll runs in the "background" (base level), and interrupts preempt it normally.
+
+**Caution:** The COMM6 write at `$0203CE` may serve as a boot handshake. If the 68K or Master polls COMM6 to confirm Slave readiness, skipping this write could cause init-time issues. Current testing shows menus work without it, but the write should be preserved if possible. See [MASTER_SH2_DISPATCH_ANALYSIS.md](analysis/architecture/MASTER_SH2_DISPATCH_ANALYSIS.md) for the full control flow analysis.
+
+### Master SH2 JMP vs JSR for Command Dispatch
+
+Both work correctly for dispatching to command handlers, because SH2 handlers follow a strict save/restore PR convention:
+
+**JSR dispatch (original):**
+```
+JSR @R0          ; PR = return_addr
+                 ; Handler saves PR, does work, restores PR, RTS → return_addr
+```
+
+**JMP dispatch (hook):**
+```
+; Caller: JSR @R1 (sets PR = loop_BRA)
+; Hook:   JMP @R0 (PR unchanged = loop_BRA)
+;         Handler saves PR, does work, restores PR, RTS → loop_BRA
+```
+
+Both produce the same result: handler returns to the dispatch loop. The difference is which address is saved — but both point to BRA $020460 (loop back). **JMP is valid** as long as PR was set correctly by the caller's JSR.
+
+**Exception:** If a handler is a leaf function that doesn't save PR AND also modifies PR (impossible for a true leaf), JMP would break. In practice all non-trivial handlers save/restore PR.
+
+### Successful Async Pattern — sh2_cmd_27 via COMM Registers (B-003, Feb 2026)
+
+**Works:** Direct parameter passing via COMM registers, bypassing Master SH2 entirely.
+
+**Design:**
+1. **68K sender** (`sh2_cmd_27` at $E3B4): Waits COMM7==0, writes params to COMM2-6, writes COMM7=$0027 (doorbell), waits COMM7==0 (ack)
+2. **Slave inline drain** (SDRAM at $020608, 88 bytes): Checks COMM7, reads COMM2-6, clears COMM7, processes pixels with cache-through writes, loops back to check for more
+3. No Master SH2 involvement, no Work RAM queue, no expansion ROM execution
+
+**Key implementation details:**
+- **COMM-only parameter passing:** data_ptr→COMM4+5 (move.l), width→COMM2, height→COMM3, add_value→COMM6. Uses ONLY documented shared memory (see "SH2 Cannot Access 68K Work RAM" above).
+- **In-place 68K replacement:** 82-byte function body replaced with 50B COMM writes + 32B NOP padding. No section space needed, no register clobber (no MOVEM needed).
+- **Two short waits:** WAIT#1 for previous entry (Slave processing time), WAIT#2 for Slave ack (~17 SH2 cycles to read params + clear COMM7). Much faster than original Master SH2 dispatch.
+- **Cache-through conversion on SH2 side:** Slave converts data_ptr from $04xxxxxx → $24xxxxxx (OR with $20000000) to bypass SH2 data cache. Without this, pixel writes stay in cache and never reach DRAM.
+- **Inline SDRAM execution:** All Slave drain code runs from SDRAM at $020608 (128-byte slot replacing original delay loop). PicoDrive cannot execute Slave code from expansion ROM ($02300000+).
+- **COMM conflict safety:** WAIT#2 ensures Slave has read all params before RTS. No other command can overwrite COMM2-6 while Slave is still reading them.
+- **Re-entrancy:** After processing, Slave BRAs back to COMM7 check — picks up next entry immediately if 68K wrote one during processing.
+
+**Tested:** Boots and runs in PicoDrive. Menu highlights, records/options, race mode all working.
+
+**Files:**
+- [code_e200.asm](disasm/sections/code_e200.asm) lines 313-346 (68K sh2_cmd_27)
+- [code_20200.asm](disasm/sections/code_20200.asm) lines 534-580 (SH2 inline drain dc.w)
+- [inline_slave_drain.asm](disasm/sh2/expansion/inline_slave_drain.asm) (SH2 source)
+
+**Previous failed approaches (v1-v3):** Used Work RAM ring buffer ($FFFB00) readable from SH2 — impossible because SH2 cannot access 68K Work RAM. See "SH2 Cannot Access 68K Work RAM" and Abandoned Approaches table.
+
+### Successful Handshake Reduction — sh2_send_cmd Single-Shot (B-004, Feb 2026)
+
+**Works:** Replace 3-phase COMM6 handshake with single-shot COMM parameter write + jump table redirect to expansion ROM handler.
+
+**Design:**
+1. **68K sender** (`sh2_send_cmd` at $E35A, 50 bytes): Waits COMM0_HI==0, writes D1→COMM1, A0→COMM2:3, A1→COMM4:5, D0→COMM6, triggers COMM0_LO=$22 + COMM0_HI=$01, returns immediately.
+2. **SH2 handler** (`cmd22_single_shot` at expansion $3010F0, 60 bytes): Reads all params from COMM1-6 in one shot (R8=$20004020 as COMM base), performs word-by-word 2D block copy with $200 stride, calls hw_init_short for completion.
+3. **Jump table redirect**: Entry at $020808 changed from $06005198 → $023010F0.
+
+**Key implementation details:**
+- **COMM7 reserved:** Layout uses COMM1-6 only. COMM7 is the Slave doorbell (sh2_cmd_27 async) and must NEVER be overwritten by cmd $22 data.
+- **hw_init_short completion:** Original handler calls hw_init_short ($060043F0) which clears COMM0+COMM1 (longword zero write to $20004020). This tells the 68K the command is done. Single-shot handler preserves this behavior — Option 2 (safest).
+- **Eliminates 2 blocking waits:** The original 3-phase protocol had 3 COMM6 handshake waits. Single-shot eliminates phases 2 and 3 entirely. 68K only waits once (COMM0_HI poll before writing).
+- **In-place replacement:** 90-byte function body → 50B new code + 40B NOP padding. No additional 68K section space needed.
+
+**Why this succeeds where blanket async failed:**
+- Fully async (Feb 14 attempt) violated the 3-phase COMM multiplexing protocol — the Slave replayed COMM writes that collided with the Master's own reads.
+- Single-shot keeps the Master SH2 dispatch path intact. The Master reads params directly from COMM registers (which the 68K has already written). No Slave involvement, no COMM replay, no protocol violation.
+- Per-call-site analysis confirmed all 14 callers pass stable pointers (SDRAM/ROM/framebuffer), disproving the pointer aliasing hypothesis.
+
+**Files:**
+- [code_e200.asm](disasm/sections/code_e200.asm) lines 281-311 (68K sender)
+- [cmd22_single_shot.asm](disasm/sh2/expansion/cmd22_single_shot.asm) (SH2 handler source)
+- [code_20200.asm](disasm/sections/code_20200.asm) line 778 (jump table patch)
+- [expansion_300000.asm](disasm/sections/expansion_300000.asm) (ROM layout)
+
+---
+
+## Active Bugs
+
+### B-006 Race-Mode Crash (All Patches Reverted)
+**Status:** FIXED — all 3 B-006 patches reverted to original game code (2026-02-11)
+**Symptom:** ROM boots, menus work, crashes with stuck engine sound when entering race mode.
+**Root cause:** Multiple interacting issues. Patch #2 (COMM7 broadcast) was the primary cause, but reverting Patch #2 alone was insufficient — Patches #1+#3 together also produced the same crash. Likely causes: shadow_path_wrapper's COMM7 barrier deadlocks the Master (blocks waiting for Slave to clear COMM7), and/or parallel vertex_transform execution on both CPUs creates data races on shared output buffers.
+**Fix:** Full revert of all 3 patches. Original game code restored at $0203CC, $02046A, $0234C8.
+
+### M0/M0b STOP + H-INT Spurious Wake (PARTIALLY FIXED)
+**Status:** Partially fixed. Main loop and wait_for_vblank now filter spurious wakes. Car selection screen improved from ~1 FPS to ~5 FPS but still slower than original (~20 FPS). Remaining cause unknown — likely a third STOP site or a different interaction (B-004 cmd22 timing, scene init state corruption, or VDP configuration issue).
+**Root cause (confirmed):** M0/M0b replaced spin-waits (`TST.W $C87A / BNE.S`) with `STOP #$2300` but removed the `$C87A` completion check. The H-INT vector at $0088170A is just `RTE` (the `vint_return` label). When H-INT fires during STOP, the CPU wakes and continues past STOP without checking if V-INT actually ran — causing the main loop to re-enter the frame handler or wait_for_vblank to return early.
+**Fix applied:** Added `TST.W $C87A / BNE.S` after both STOP sites (same-size replacement of NOP padding). Spurious wakes loop back to STOP instead of falling through.
+**Remaining issue:** Car selection screen (camera_selection_main_loop) still runs at ~25% of original speed. The improvement from 1 FPS → 5 FPS confirms H-INT wakes were a factor, but a secondary cause remains. Parked as isolated issue — other menus and racing work correctly.
+**Rule:** When using STOP #$2300 on the 68K, ALWAYS add a completion flag check after it. STOP wakes on ANY interrupt at or above the mask level, not just the intended one.
+**Files:** `disasm/modules/68k/game/render/vdp_display_init.asm` (main loop), `disasm/modules/68k/frame/wait_for_vblank.asm`
+
+### FPS Counter — BSR.W Displacement Bug (FIXED, diagnostic mode)
+**Status:** Build-fixed. Pending emulator verification.
+**Root cause:** vasm `bsr.w fps_render` landed at `fps_render+2` (Line-F exception). fps_render never executed. Display showed 00 because nothing was ever drawn — not a RAM sweep or sampling bug.
+**Fix:** `jsr fps_render+$880000` in wrapper (both call sites); `bsr.s .render_fb` inside fps_render (both call sites).
+**Current mode:** Diagnostic — epilogue shows V-INT interval between work frames. Expected ~3 in race mode (one work frame per 3 V-INTs at 60 Hz = ~20 FPS).
+**Next step:** Verify non-zero display in PicoDrive, then replace diagnostic with production 60-V-INT window counter.
+**Files:** [fps_vint_wrapper.asm](disasm/modules/68k/optimization/fps_vint_wrapper.asm), [fps_render.asm](disasm/modules/68k/optimization/fps_render.asm)
+
+---
+
+## 68K Section Packing — Hardcoded Absolute Address Jump Tables
+
+### Adding Bytes to code_6200 or code_A200 Breaks Jump Tables
+
+Both `code_6200` ($6200-$81FF) and `code_A200` ($A200-$C1FF) are **exactly packed to their 8192-byte section boundaries**. Adding even a single byte overflows into the next section. More critically, both sections contain jump tables with **hardcoded absolute addresses** that break when any preceding code shifts:
+
+**code_6200** — `object_type_dispatch.asm`:
+```asm
+MOVEA.L $007A52(PC,D0.W),A1    ; load handler from table
+JMP     (A1)
+DC.W    $0088                   ; high word of $00887A8A
+MOVEQ   #-$76,D5               ; MOVEQ byte = $8A = low byte of address
+; ... 14 entries using DC.W $0088 + MOVEQ trick for longword addresses
+```
+The DC.W+MOVEQ pairs form absolute 68K CPU addresses. When code shifts, the PC-relative offset `$007A52(PC,D0.W)` still points at the right table location, but the table VALUES are absolute addresses that must match the functions they point to. Since those functions also shifted, the addresses are now wrong.
+
+**code_A200** — `entity_type_dispatch_tables.asm`:
+```asm
+entity_type_handler_ptr_table:
+    dc.l    $0088A972   ; → ai_entity_main_update_orch
+    dc.l    $0088AB88   ; → ai_entity_main_update_orch+$216
+    dc.l    $0088ABCE   ; → ai_entity_main_update_orch+$25C
+```
+These are raw absolute addresses. Making them label-based (`dc.l label+$00880000`) works within the section, but **cross-section absolute JSR/JMP references** from other sections also target code_A200 addresses. Those JSRs don't auto-adjust when code shifts.
+
+**Proven crash (2026-03-12):** Adding 6 bytes (MULU #$AAAB + SWAP) to entity_pos_update in code_6200 caused a 3D engine crash in attract mode. Adding 6 bytes to speed_interpolation in code_A200 also crashed. Both were reverted.
+
+**Rule:** Never add or remove bytes in code_6200 or code_A200. Only modify constant values within existing instructions (same opcode, same size). To add new behavior, either:
+1. Modify DATA (lookup table values) instead of CODE
+2. Find a section with free space for the new logic
+3. Replace an existing instruction with an equal-size alternative
+
+---
+
+## Camera Interpolation — Implementation Notes
+
+### vasm `dcb.b (label_expr),val` Does Not Work
+When using `dcb.b (object_table_sprite_param_update+216-*),$FF` to compute padding dynamically, vasm evaluates `*` as the address BEFORE the code between the label and the `dcb.b`, producing incorrect padding. **Always use hardcoded byte counts** for `dcb.b` padding after trampoline code.
+
+### State Dispatcher Coverage Gap
+Only `state_disp_005020` (active racing) is hooked for camera snapshot in state 0. The other 4 race dispatchers (`004cb8` pre-race, `005308` post-race, `005586` attract, `005618` replay) call `mars_dma_xfer_vdp_fill` directly without snapshots. Similarly, only `frame_update_orch_005070` (state 4 of `005020`) is hooked for the interpolation epilogue. Non-racing modes and other race phases still run at 20 FPS.
+
+### FS Swap Must Happen During VBlank (CRITICAL — Discovered March 2026)
+Per the corrected 32X Hardware Manual (page 35): **"Swapping the Frame Buffer is allowed during V Blank (VBLK = 1) or when in Blank mode. However, writing the FS bit is always allowed, and when written during display, swapping is done at the next VBlank."**
+
+This means writing FS outside VBlank is DEFERRED to the next VBlank. Our inline `bchg #0,$A1518B` in state 4's main loop writes during active display — the swap is deferred to the same VBlank where state 8's `vdp_dma_frame_swap_037` does its own swap. The two swaps cancel each other out at the same VBlank boundary.
+
+**Rule:** Frame buffer swaps MUST happen inside V-INT handlers (which run during VBlank), not in the main loop. The original game does this correctly — `vdp_dma_frame_swap_037` runs as a V-INT handler.
+
+### ~~Re-DMA Does NOT Trigger SH2 Re-Render~~ — MISDIAGNOSIS (March 16, 2026)
+
+**STATUS: RESOLVED.** Re-DMA DOES trigger SH2 re-render. The working 40 FPS code (A-1, commit b6bd487) calls `mars_dma_xfer_vdp_fill` **twice** per game frame — state 0 (`camera_snapshot_wrapper`) and state 4 (`camera_avg_and_redma`). Both calls trigger SH2 renders via cmd $02 (scene orchestrator).
+
+The original "zero visual effect" observation came from 3 known bugs in the WIP `camera_interpolation_60fps.asm`: (1) BSR.W displacement error, (2) block-copy from wrong source `$06030000`, (3) state 0 additions that broke the 40 FPS path.
+
+**SH2 racing handler architecture (disassembled March 16, CORRECTED March 16 evening):**
+- **Per-frame DMA uses cmd $02** → handler `$06000CFC` (scene orchestrator, entity loop callers). C8A8 = $0102 in ALL modes (see `SCENE_HANDLER_ARCHITECTURE.md` §5).
+- **Cmd $03** → handler `$06000CC4` is a **one-time** buffer clear sent during scene init only (race_scene_init_vdp_mode sets $0103, consumed by COMM0 write, then overwritten to $0102 by scene_init_orch fall-through).
+- Jump table at `$06000780`: index = COMM0_LO, SHLL2'd
+
+**Rule:** When debugging "X doesn't work," check whether the observation came from buggy test code. The 40 FPS A-1 code is the authoritative proof that re-DMA + re-render works.
+
+### A-2 WIP Module Bugs (camera_interpolation_60fps.asm)
+The untracked WIP module for 60 FPS rendering has 3 known bugs. DO NOT include it in the build until fixed:
+1. **BSR.W displacement bug (line 123):** `bsr.w camera_avg_and_redma_60fps` — per the "vasm BSR.W" rule above, never use `bsr.w` in new code. Fix: use `bsr.s` (target is within range).
+2. **Diagnostic garbage block-copy (lines 83-93):** `camera_avg_and_redma_60fps` sends block-copy from WRONG source `$06030000` — this was a deliberate test left in production code. Fix: replace with proper `jsr MARS_DMA_XFER_VDP_FILL`.
+3. **Breaks working 40 FPS:** `state0_60fps` adds block-copy + swap in state 0 that wasn't in the verified 40 FPS code path. The committed 40 FPS code (in code_2200.asm) only does snapshot + DMA in state 0.
+
+### Documentation Remediation (March 2026)
+~238 errors were found and fixed across 25 documentation files (76 in SEGA PDF transcriptions, 162 in analysis documents). The most dangerous errors:
+- DREQ register bit positions wrong (68S at bit 0 instead of bit 2)
+- SH2 memory map SDRAM/ROM swapped
+- Adapter Control Register shifted 8 bits
+- $06000000 falsely labeled "emulator-only"
+- FS/FM bit confusion across 20+ analysis files
+- VDP register function names wrong (registers 19-23)
+- NTSC/PAL Hz swapped
+
+**Rule:** Never trust the markdown docs without cross-referencing the original PDF. When in doubt, read the PDF.
+
+---
+
+## 68K Section Space Constraints
+
+### $00E200-$010200 Has 0 Bytes Free
+The SH2 communication section is completely full. Any new 68K-side code must either:
+1. Reclaim dead code within the section
+2. Use a BSR trampoline to a section with space
+3. **Replace existing function bodies in-place** (used for B-003: sh2_cmd_27's 82-byte body replaced with 68B async enqueue + 14B padding)
+3. Use a banked-call trampoline to expansion ROM at $300000+ (see bank_probe results)
+
+Previous attempt to add async queue logic here was removed (commit 0dd98c4).
+
+### Expansion ROM — 68K Access via Banking (Pending Confirmation)
+ROM $300000-$3FFFFF (~1MB, 99.9% free) is accessible to the 68K via banking or possibly direct access. Once `bank_probe` results confirm the access path, heavy 68K logic can be relocated here using fixed-window trampolines (see [bank_call.asm](disasm/modules/shared/bank_call.asm) for patterns). This solves the B-001 space blocker.
+
+---
+
+## Abandoned Approaches (Don't Re-Try)
+
+| Approach | Why It Failed |
+|----------|--------------|
+| Code injection via `phase11_rom_patcher.py` | Reached space/alignment limits |
+| 68K V-INT hook via BSR.W | Exceeded ±32KB range (actual distance: 85KB) |
+| 68K in-section async queue | 0 bytes free in $E200 section, removed commit 0dd98c4 |
+| SH2 optimization alone for FPS | 66.6% Slave reduction → 0% FPS change (68K is bottleneck) |
+| unrolled_data_copy FIFO batching | Fall-through control flow, can't restructure without breaking callers |
+| quad_helper-019 optimization in isolation | Tightly coupled: shared code paths, cross-function branching |
+| COMM7 broadcast of game commands via dispatch hook | Game cmd bytes (0x01, 0x27) collide with expansion signal values → Slave processes uninitialized queue → crash. See §COMM7 Signal Namespace Collision above. |
+| Placing Patch #2 literal at $020480 | Shared by D011@$020438 (init code). Silently redirects init JSR to hook address. Always scan for $Dnxx refs before overwriting. |
+| Fully async general commands ($22/$25/$2F/$21) | Buffer aliasing: 68K overwrites shared data buffers before Slave replays COMM protocol. Menu graphics corrupt, race timer runs at wrong speed. COMM replay mechanism confirmed working (race 3D scene rendered). Infrastructure kept dormant at $301000. Needs per-call-site data dependency analysis before selective async activation. |
+| Work RAM ring buffer for SH2 queue ($FFFB00) | SH2 CANNOT access 68K Work RAM at ANY address. $02FFFB00 and $22FFFB00 are both in unmapped space (past SDRAM at $0203FFFF, before Frame Buffer at $04000000). Three attempts failed before reading the hardware manual. **Use COMM registers or SDRAM for 68K↔SH2 shared data.** |
+| Synchronous COMM offload of `angle_normalize` BSP | COMM handshake overhead (polling COMM0_HI) vastly exceeds the computation saved. The 316-byte pure-math function costs ~1,500 68K cycles/frame natively but the COMM stub added **23% of total 68K time** (69M cycles) spinning in `.wait_idle` — waiting for the Master SH2 to finish *prior* COMM commands (sh2_send_cmd copies). The BSP math itself completed fast on SH2 (0.7% in `.wait_done`). **Rule: synchronous COMM offload only works when computation time >> handshake overhead. Small, frequently-called functions (8×/frame) are anti-candidates.** SH2 handler + jump table kept dormant at $02301178 (cmd $30). Revert: 68K runs BSP natively. |
+| S-1a/S-1c entity visibility culling (full pipeline) | Entity descriptors at $0600C344 proven unused during racing (S-1d, 4 independent profiling tests). LOD distance checks + bitmask builder + COMM cmd $07 + SH2 handler all reverted. Jump table entry $07 restored to original $06000490. |

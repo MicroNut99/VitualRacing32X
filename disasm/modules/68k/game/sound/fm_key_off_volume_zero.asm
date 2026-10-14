@@ -1,0 +1,40 @@
+; ============================================================================
+; FM Key-Off + Volume Zero — key-off all channels and zero volumes
+; ROM Range: $030B50-$030B90 (64 bytes)
+; ============================================================================
+; Requests Z80 bus, writes key-off (register $28) for all 6 FM channels
+; (0-2 and 4-6). Then writes Total Level = $7F (silence) to all TL
+; registers ($40-$53) using fm_write_port0 with $030CFE helper for
+; register auto-increment. 3 groups of 4 operators each. Releases bus.
+;
+; Uses: D0, D1, D2, D3
+; Calls:
+;   $030CD8: fm_write_port0
+;   $030D1C: z80_bus_request
+; Confidence: high
+; ============================================================================
+
+fm_key_off_volume_zero:
+        MOVEQ   #$02,D2                         ; $030B50
+        MOVEQ   #$28,D0                         ; $030B52
+        jsr     z80_bus_wait(pc)        ; $4EBA $01C6
+.key_off_loop:
+        MOVE.B  D2,D1                           ; $030B58
+        jsr     fm_write_cond+12(pc)    ; $4EBA $017C
+        ADDQ.B  #4,D1                           ; $030B5E
+        jsr     fm_write_cond+12(pc)    ; $4EBA $0176
+        DBRA    D2,.key_off_loop                    ; $030B64
+        MOVEQ   #$40,D0                         ; $030B68
+        MOVEQ   #$7F,D1                         ; $030B6A
+        MOVEQ   #$02,D3                         ; $030B6C
+.volume_group_loop:
+        MOVEQ   #$03,D2                         ; $030B6E
+.volume_reg_loop:
+        jsr     fm_write_cond+12(pc)    ; $4EBA $0166
+        jsr     fm_write_port_0_1+10(pc); $4EBA $0188
+        ADDQ.W  #4,D0                           ; $030B78
+        DBRA    D2,.volume_reg_loop                    ; $030B7A
+        SUBI.B  #$0F,D0                         ; $030B7E
+        DBRA    D3,.volume_group_loop                    ; $030B82
+        MOVE.W  #$0000,Z80_BUSREQ                ; $030B86
+        RTS                                     ; $030B8E

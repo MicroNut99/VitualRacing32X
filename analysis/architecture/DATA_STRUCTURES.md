@@ -1,0 +1,586 @@
+# Virtua Racing Deluxe - Data Structure Reference
+
+**Last Updated**: March 8, 2026
+
+This document consolidates all known data structures used by the 68K and SH2 CPUs.
+
+**Confidence Levels:**
+- ✅ **Confirmed** - Verified from ROM analysis or hardware documentation
+- 📋 **Inferred** - Derived from code patterns, not directly verified
+- ❓ **Hypothetical** - Educated guess based on typical game engine patterns
+
+---
+
+## Memory Map Overview
+
+### 68K Address Space (✅ Confirmed)
+
+| Range | Size | Description |
+|-------|------|-------------|
+| $000000-$3FFFFF | 4MB | ROM (cartridge) |
+| $840000-$85FFFF | 128KB | 32X Frame Buffer - **requires FM=0** |
+| $860000-$87FFFF | 128KB | 32X Overwrite Image - **requires FM=0** |
+| $880000-$8FFFFF | 512KB | ROM Cartridge mirror ($000000-$07FFFF, 4Mbit fixed) |
+| $900000-$9FFFFF | 1MB | ROM Cartridge bank-switched (32Mbit÷4 banks via Bank Set Register) |
+| $A00000-$A0FFFF | 64KB | Z80 Sound RAM |
+| $A10000-$A1001F | 32B | Genesis I/O ports |
+| $A15100-$A15138 | 57B | 32X System Registers (Adapter Ctrl thru PWM Mono) |
+| $A15180-$A1518A | 11B | 32X VDP Registers |
+| $A15200-$A153FF | 512B | 32X Color Palette (256 entries × 16-bit) |
+| $A15120-$A1512F | 16B | COMM Registers (68K side) |
+| $C00000-$C0001F | 32B | VDP Registers |
+| $FF0000-$FFFFFF | 64KB | 68K Work RAM |
+
+### SH2 Address Space (✅ Confirmed per Hardware Manual)
+
+| Range | Size | Description | Cache |
+|-------|------|-------------|-------|
+| $00000000-$00000FFF | 4KB (📋) | SH2 Internal Boot ROM (size varies by SH2 model) | - |
+| $00004000-$000040FF | 256B | SH2 System Registers | - |
+| $00004100-$000041FF | 256B | VDP Registers | - |
+| $00004200-$000043FF | 512B | Color Palette | - |
+| $02000000-$023FFFFF | 4MB | ROM Cartridge (CS1) | Cached |
+| $04000000-$0401FFFF | 128KB | Frame Buffer (CS2) - **requires FM=1** | Cached |
+| $04020000-$0403FFFF | 128KB | Overwrite Image (CS2) - **requires FM=1** (per manual) | Cached |
+| **$06000000-$0603FFFF** | **256KB** | **SDRAM (CS3)** | Cached |
+| $20004000-$200040FF | 256B | System Registers (cache-through) | Bypass |
+| $22000000-$2203FFFF | 256KB | ROM Cartridge (cache-through) | Bypass |
+| $24000000-$2401FFFF | 128KB | Frame Buffer (cache-through) - **requires FM=1** | Bypass |
+| $24020000-$2403FFFF | 128KB | Overwrite Image (cache-through) - **requires FM=1** | Bypass |
+| **$26000000-$2603FFFF** | **256KB** | **SDRAM (cache-through)** | Bypass |
+
+**FM Bit (VDP Access Authorization):**
+- FM=0 (default): Only 68K can access frame buffer, overwrite image, VDP registers, color palette
+- FM=1: Only SH2 can access these regions
+- When wrong FM state: reads return undefined, writes are ignored
+
+**Cache notes:**
+- Addresses $0X000000 use cache; $2X000000 bypass cache
+- **Critical for inter-CPU sharing:** Use cache-through ($26000000) for SDRAM data shared between Master/Slave
+- **COMM register access:** Each COMM register is 16-bit. Both 68K and SH2 can access as byte or word. SH2 can also do longword reads/writes that span two adjacent COMM registers. The hardware manual specifies "Access: Byte/Word" for communication ports.
+
+**SH2 SDRAM Address Note:**
+
+Per the hardware manual SH2 memory map, SDRAM is at **$06000000** (cached) / **$26000000** (cache-through). These are the CS3 area addresses.
+
+- **$02000000** is **ROM Cartridge** (CS1), NOT SDRAM
+- **$06000000** IS the correct SDRAM address per the official hardware manual
+- Cache-through SDRAM access: use **$26000000** (NOT $22000000, which is cache-through ROM)
+
+Historical note: An earlier version of this document incorrectly listed SDRAM at $02000000 and claimed $06000000 was an emulator artifact. This was wrong -- the hardware manual explicitly maps SDRAM to CS3 at $06000000/$26000000.
+
+---
+
+## SH2 Access Timing (✅ Confirmed - Hardware Manual §4.1)
+
+Official wait states for SH2 memory access. Critical for performance optimization.
+
+### Frame Buffer (CS2: $04000000 / $24000000)
+
+| Operation | Wait Clocks | Condition |
+|-----------|-------------|-----------|
+| Write | 3 | FIFO not full (FULL=0) |
+| Write | 5 | FIFO full (FULL=1) |
+| Read | 6 | Always |
+
+**FIFO Note**: The SH2 has a 4-word write FIFO for frame buffer. Batch writes in groups of 4 for optimal throughput (14 clocks for 4 words = 3.5 clocks/word average).
+
+### SDRAM (CS3: $06000000 / $26000000)
+
+| Operation | Wait Clocks | Notes |
+|-----------|-------------|-------|
+| Longword Write | 2 | Single word |
+| Longword Read | 12 | Initial access |
+| Burst Read | 12 + 2×(n-1) | First word + subsequent |
+
+**Burst Mode**: After initial 12-clock penalty, sequential reads cost only 2 clocks each. Align data for sequential access:
+- 8-word burst: 12 + 14 = 26 clocks (vs. 96 clocks for 8 individual reads)
+
+### VDP Registers ($00004100 / $20004100)
+
+| Operation | Wait Clocks |
+|-----------|-------------|
+| Read | 5 |
+| Write | 5 |
+
+### System Registers ($20004000)
+
+| Operation | Wait Clocks |
+|-----------|-------------|
+| Read | 1 |
+| Write | 1 |
+
+### Color Palette ($00004200 / $20004200)
+
+| Operation | Wait Clocks |
+|-----------|-------------|
+| Read | 5 |
+| Write | 5 |
+
+### 68K Access Timing Summary
+
+| Resource | Timing |
+|----------|--------|
+| ROM via Cartridge Connector | Directly connected (no 32X overhead) |
+| 32X Frame Buffer ($840000) | Requires FM=0 (VDP access authorization to MD) |
+| 32X Registers ($A15100) | Wait states as per §3.2 |
+| Z80 RAM ($A00000) | Standard Genesis timing |
+
+**Cross-Reference**: See [OPTIMIZATION_OPPORTUNITIES.md](../optimization/OPTIMIZATION_OPPORTUNITIES.md) for how to exploit these timings.
+
+---
+
+### Unknown: 0xC0000XXX Addresses (❓ Hypothetical)
+
+The 3D transform code uses addresses like `0xC0000740`, `0xC0000760`. These are **not standard 32X mappings**.
+
+Possible explanations:
+- Undocumented hardware alias
+- Upper address bits decoded differently by 32X
+- May map to SDRAM or frame buffer region
+
+**Impact:** Cannot share transform buffers between CPUs without copying to cache-through SDRAM (0x26000XXX).
+
+See [../sh2-analysis/SLAVE_INTEGRATION_RESEARCH.md](../sh2-analysis/SLAVE_INTEGRATION_RESEARCH.md) for cache-through staging strategies.
+
+---
+
+### Work RAM Layout ($FF0000-$FFFFFF) (📋 Inferred)
+
+```
+$FF0000-$FF5FFF: General work area (24KB)
+$FF6000-$FF6FFF: Display/VDP state (4KB)
+  $FF6950: Object flags
+  $FF6960: Display state flag
+  $FF68F0: Status code
+  $FF68F8: Time display buffer (8 bytes)
+
+$FF9000-$FF9FFF: Object tables (4KB)
+  $FF9100: Object Table 1 (6 entries, hardware loop)
+  $FF9700: Object Table 2 (8 entries, hardware loop)
+  $FF9F00: Object Table 3 (1 entry, hardware loop)
+
+$FFC000-$FFCFFF: Control state (4KB)
+  $FFC0xx: System control parameters
+  $FFC8xx: Game state machine indices
+```
+
+---
+
+## State Machine Variables ($FFC000-$FFC9FF) (📋 Inferred)
+
+See [STATE_MACHINES.md](STATE_MACHINES.md) for complete documentation.
+
+| Address | Name | Range | Purpose |
+|---------|------|-------|---------|
+| $FFC048 | camera_state | 0-N | Camera mode |
+| $FFC050 | scroll_state | 0-N | Scroll position |
+| $FFC07C | input_state | 0-N | Controller state |
+| $FFC082 | menu_state | 0-N | Menu navigation |
+| $FFC084 | menu_substate | 0-N | Sub-menu state |
+| $FFC0A2 | gfx_mode | 0-N | Graphics mode |
+| $FFC0FA | timer_state | 0-N | Timer/countdown |
+| $FFC87E | game_state | 0-60 | Main game state (×4) |
+| $FFC89C | sh2_comm_state | 0-N | SH2 communication |
+| $FFC89E | sh2_comm_sub | 0-N | Comm sub-state |
+| $FFC8A0 | race_state | 0-N | Race phase |
+| $FFC8AA | scene_state | 0-N | Scene transitions |
+| $FFC80E | **[UNDOCUMENTED]** | varies | **RAM status byte** (tested by $010B2C, $010BAE) |
+| $FFC8C8 | vint_state | 0-N | V-INT processing |
+| $FFC8CC | race_substate | 0-N | Race sub-phase |
+| **$FFC8D0** | **async_queue_start** | - | **Async command queue (Phase 1A)** ✅ |
+| $FFC8D0 | pending_cmd_valid | 0-1 | 1=command pending in queue |
+| $FFC8D2 | pending_cmd_type | 0-N | Command type ($27, etc.) |
+| $FFC8D4 | pending_cmd_count | 0-N | Commands awaiting frame sync |
+| $FFC8D6 | [reserved] | - | Alignment padding |
+| $FFC8D8 | pending_cmd_params | - | Parameter storage (3 longs) |
+| $FFC8E4 | total_cmds_async | 0-∞ | Total async commands issued (long) |
+| $FFC8E8 | async_overflow_count | 0-N | Queue full events (word) |
+| $FFC8EA | [reserved] | - | Alignment padding |
+| $FFC8EC | total_wait_cycles | 0-∞ | Cumulative wait cycles (long) |
+| $FFC8F0 | max_wait_cycles | 0-∞ | Peak wait cycles (long) |
+| **$FFC8F4** | **async_queue_end** | - | **(36 bytes allocated)** ✅ |
+| $FFC964 | frame_counter | 0-∞ | Frame count |
+| $FFC972 | anim_state | 0-N | Animation state |
+
+---
+
+## Object Table Structure (📋 Inferred)
+
+### Object Table 1 ($FF9100) - 6 Entries
+
+Used by `func_6D9C` hardware loop. Likely main game objects (player car, etc.)
+
+```
+Offset  Size  Field              Confidence
+------  ----  -----              ----------
+$00     2     flags/type         📋 Inferred
+$02     2     x_position         📋 Inferred
+$04     2     y_position         📋 Inferred
+$06     2     z_depth            📋 Inferred
+$08     2     sprite_index       📋 Inferred
+$0A     2     animation_frame    📋 Inferred
+$0C     4     world_x            📋 Inferred (16.16 fixed)
+$10     4     world_y            📋 Inferred (16.16 fixed)
+$14     4     world_z            📋 Inferred (16.16 fixed)
+$18     2     velocity           📋 Inferred
+$1A     2     direction          📋 Inferred
+$1C     4     [unknown]          ❓
+------
+Total: ~32 bytes per entry (estimated)
+```
+
+### Object Table 2 ($FF9700) - 8 Entries
+
+Used by `func_6DC8` hardware loop. Secondary objects (opponent cars, items).
+
+### Object Table 3 ($FF9F00) - 1 Entry
+
+Used by `func_DF0` single-iteration loop. Special object (camera target, etc.)
+
+---
+
+## 32X Frame Buffer Format (✅ Confirmed)
+
+### Memory Layout ($840000-$87FFFF)
+
+```
+$840000-$85FFFF: Frame Buffer (128KB, draw/display selected by FS bit)
+$860000-$87FFFF: Overwrite Image (128KB, same physical DRAM, alternate access mode)
+
+Note: Both physical frame buffers (DRAM0/DRAM1) are accessed through $840000.
+The FS bit in VDP FBCTL ($A1518A bit 0) selects which DRAM is display vs. draw.
+68K sees only the draw buffer at $840000 (requires FM=0).
+
+Frame buffer layout:
+$840000-$8401FF: Line Table (256 × 16-bit offsets)
+$840200-$85FFFF: Pixel Data
+```
+
+### Line Table Entry (✅ Confirmed)
+
+```
+Bits 15-0: Offset from frame buffer base to start of scanline
+           Allows non-contiguous scanline storage for scrolling
+```
+
+### Pixel Format - Packed Pixel Mode (✅ Confirmed)
+
+```
+Each byte = 1 pixel (8-bit palette index)
+Resolution: 320×224 = 71,680 bytes
+```
+
+### Palette Format ($A15200) (✅ Confirmed)
+
+```
+256 entries × 16-bit each
+Bit 15:     Priority (1 = high priority over Genesis plane)
+Bits 14-10: Blue (0-31)
+Bits 9-5:   Green (0-31)
+Bits 4-0:   Red (0-31)
+```
+
+---
+
+## 68K-SH2 Communication Protocol
+
+### COMM Registers (✅ Confirmed)
+
+**68K Side ($A15120-$A1512F):**
+
+| Address | Register | Size | Description |
+|---------|----------|------|-------------|
+| $A15120 | COMM0 | 16-bit | Command/status |
+| $A15122 | COMM1 | 16-bit | Parameter 1 |
+| $A15124 | COMM2 | 16-bit | Parameter 2 |
+| $A15126 | COMM3 | 16-bit | Parameter 3 |
+| $A15128 | COMM4 | 16-bit | Response 1 |
+| $A1512A | COMM5 | 16-bit | Response 2 |
+| $A1512C | COMM6 | 16-bit | Response 3 |
+| $A1512E | COMM7 | 16-bit | Response 4 |
+
+**SH2 Side ($20004020-$2000402F):**
+
+| Address | Register | Original Game (📋 Inferred) | v2.3 Protocol (✅ Validated) |
+|---------|----------|----------------------------|------------------------------|
+| $20004020 | COMM0 | 68K→SH2 command (RENDER_FRAME=0x0001) | *unchanged* |
+| $20004022 | COMM1 | Display list address | *unchanged* |
+| $20004024 | COMM2 | Work status flags | *unchanged* |
+| $20004026 | COMM3 | Slave writes "OVRN" in idle loop | *unchanged* |
+| $20004028 | COMM4 | *Unused by original* | **Slave frame counter** |
+| $2000402A | COMM5 | *Unused* | *unused* |
+| $2000402C | COMM6 | *Unused by original* | **Master→Slave signal** (0x0012=work) |
+| $2000402E | COMM7 | *Unused* | *unused* |
+
+### Original Protocol Flow (📋 Inferred)
+
+```
+1. 68K writes command to COMM0/COMM1
+2. 68K waits for SH2 response
+3. Master SH2 reads COMM0/COMM1
+4. Master SH2 processes command
+5. Master SH2 writes response to COMM4/COMM5
+6. 68K reads response
+```
+
+### v2.3 Synchronization Protocol (✅ Validated)
+
+```
+MASTER                              SLAVE
+  |                                   |
+  |-- Set COMM6 = 0x0012 ------------>|  (signal)
+  |                                   |
+  |                         Hook detects signal
+  |                         Call handler @ 0x02300027
+  |                         Increment COMM4
+  |                         Clear COMM6 = 0x0000
+  |                                   |
+  |<-- COMM4 incremented -------------|  (acknowledge)
+```
+
+See [MASTER_SLAVE_ANALYSIS.md](MASTER_SLAVE_ANALYSIS.md) for complete v2.3 protocol documentation.
+
+### Known Commands (📋 Inferred)
+
+| COMM0 | COMM1 | Description |
+|-------|-------|-------------|
+| $0001 | addr | Render frame at display list address |
+| $0002 | flags | Set render mode flags |
+| $0003 | - | Frame sync |
+| $FFFF | - | Reset/initialize |
+
+---
+
+## SH2 Rendering Structures
+
+### Rendering Context (📋 Inferred, ~56 bytes)
+
+Multiple registers point to context structures during rendering. Based on matrix_multiply/display_list_4elem/display_list_3elem analysis:
+
+**R14-based context (word operations):**
+```
+Offset  Size  Field               Evidence
+------  ----  -----               --------
+$02     2     [word field]        MOV.W @(2,R14),R0 in display_list_4elem/010
+$06     2     [counter/index]     MOV.W @(6,R14),R0 / MOV.W R0,@(6,R14)
+```
+
+**R6-based context (matrix_multiply):**
+```
+Offset  Size  Field               Evidence
+------  ----  -----               --------
+$1C     4     scale_factor        MOV.L @(28,R6),R3 in matrix_multiply
+```
+
+**R10-based output (screen coordinates):**
+```
+Offset  Size  Field               Evidence
+------  ----  -----               --------
+$0C     2     screen_y            MOV.W R0,@(12,R10) in matrix_multiply
+$0E     2     screen_x            MOV.W R0,@(14,R10) in matrix_multiply
+```
+
+**R11-based output buffer (display_list_4elem/010):**
+```
+Offset  Size  Field               Evidence
+------  ----  -----               --------
+$02     2     [header word]       MOV.W R0,@(2,R11)
+$04     4     element[0]          MOV.L R0,@(4,R11)
+$08     4     element[1]          MOV.L R1,@(8,R11)
+$0C     4     element[2]          MOV.L R2,@(12,R11)
+$10     4     element[3]          MOV.L R3,@(16,R11) (display_list_4elem only)
+```
+
+**Note:** The original generic "SH2 Rendering Context" structure documented below may not match actual code. The above is derived from matrix_multiply/009/010 disassembly.
+
+### Generic Rendering Context (❓ Hypothetical, 56 bytes)
+
+This structure is **hypothetical** - may not match actual game code:
+
+```
+Offset  Size  Field               Notes
+------  ----  -----               -----
+$00     4     callback_ptr        Subroutine address
+$04     4     display_list_ptr    Current display list
+$08     4     vertex_buffer_ptr   Output vertex buffer
+$0C     4     work_buffer_ptr     Temporary calculations
+$10     4     frame_buffer_ptr    Target frame buffer
+$14     4     depth_buffer_ptr    ❌ UNUSED — no Z-buffer (painter's algorithm instead)
+$18     4     matrix_ptr          Current transform matrix
+$1C     4     light_vector_ptr    Lighting direction
+$20     4     polygon_count       Number of polygons
+$24     4     vertex_count        Number of vertices
+$28     4     render_flags        Mode flags
+$2C     4     clip_planes         Near/far clip values
+$30     4     screen_width        Viewport width
+$34     4     screen_height       Viewport height
+```
+
+---
+
+## Transformation Matrix (✅ Confirmed, 64 bytes)
+
+4×4 matrix in 16.16 fixed-point format. Standard 3D graphics layout.
+
+```
+        | M00  M01  M02  M03 |
+Matrix =| M10  M11  M12  M13 |
+        | M20  M21  M22  M23 |
+        | M30  M31  M32  M33 |
+
+Offset  Field    Usage
+------  -----    -----
+$00     M00      Scale X / Rotation
+$04     M01      Rotation
+$08     M02      Rotation
+$0C     M03      Translation X
+$10     M10      Rotation
+$14     M11      Scale Y / Rotation
+$18     M12      Rotation
+$1C     M13      Translation Y
+$20     M20      Rotation
+$24     M21      Rotation
+$28     M22      Scale Z / Rotation
+$2C     M23      Translation Z
+$30     M30      Perspective
+$34     M31      Perspective
+$38     M32      Perspective
+$3C     M33      W (usually 1.0 = 0x00010000)
+```
+
+---
+
+## Display List Entry (✅ Confirmed, 20 bytes for quads / 16 bytes for tris)
+
+Generated by `display_list_4elem` (func_009, 20B stride) and `display_list_3elem` (func_010, 16B stride).
+
+```
+Offset  Size  Field
+------  ----  -----
+$00     2     flags           Non-zero = active, 0 = skip
+$02     2     header          Display state word (from context+2)
+$04     4     vertex_data[0]  Longword from source @(+0x0C) — 16B stride
+$08     4     vertex_data[1]  Longword from source @(+0x1C)
+$0C     4     vertex_data[2]  Longword from source @(+0x2C)
+$10     4     vertex_data[3]  Longword from source @(+0x3C) (quads only)
+```
+
+### Shading Model (✅ Confirmed — Flat Only)
+
+- **No Gouraud shading** — `span_filler_short` interpolates position only
+- **No texture mapping** — `raster_batch` copies pre-computed gradient strips from SDRAM, not per-polygon textures
+- **No per-pixel depth testing** — 68K uses painter's algorithm (`depth_sort.asm`), SH2 writes framebuffer directly
+
+### Color Pipeline (✅ Confirmed)
+
+Color is an **8-bit palette index** (0-255). Flow through the pipeline:
+1. Propagated as a longword at offset +12 of 16-byte source records (func_003/004 copy `@(12,R6)` → `@(12,R7)`)
+2. In the rasterizer, read as `MOV.W @(30,R8),R0` — high byte contains the palette index
+3. Extracted via `AND $FF00` mask, replicated via `SWAP.B + OR` for word-aligned fills
+4. Written to framebuffer: `MOV.B R4,@R1` (single pixel) or `MOV.W R4,@R1` (2 pixels)
+5. VDP hardware fill via GBR registers for long spans
+
+### Render Path Selection (✅ Confirmed)
+
+Render path is NOT selected by a "polygon type" byte. Instead:
+- `frustum_cull_short` uses CMP/GT visibility tests on transformed vertex pairs
+- The 12-case jump table in `display_list_short` dispatches on **context+4** (display engine state), not a per-polygon type field
+- TST #8 on context+28 clip flags selects between flat rendering and clipped edge handling
+
+### Reciprocal Lookup Table (✅ Confirmed)
+
+| Property | Value |
+|----------|-------|
+| SDRAM Address | $060048D0 (cached) / $260048D0 (cache-through) |
+| ROM Offset | $0248D0 |
+| Size | 256 entries (512 bytes) |
+| Format | 0.14 unsigned fixed-point |
+| Formula | `table[N] = floor(16384 / N)` |
+| Entry[0] | $7FFF (sentinel for ΔY=0) |
+| Entry[1] | $4000 (= 16384) |
+| Entry[255] | $0040 (= 64) |
+| Used By | `span_filler_short` and `polygon_batch_short` |
+
+---
+
+## Vertex Structure (📋 Inferred)
+
+### Input Vertex (model space, 32 bytes)
+
+```
+Offset  Size  Field
+------  ----  -----
+$00     4     x           16.16 fixed-point
+$04     4     y           16.16 fixed-point
+$08     4     z           16.16 fixed-point
+$0C     4     w           1.0 (homogeneous)
+$10     4     nx          Normal X (for lighting)
+$14     4     ny          Normal Y
+$18     4     nz          Normal Z
+$1C     4     color       Vertex color (Gouraud)
+```
+
+### Output Vertex (screen space, ~52 bytes)
+
+```
+Offset  Size  Field
+------  ----  -----
+$00     4     screen_x    Screen X (16.16)
+$04     4     screen_y    Screen Y (16.16)
+$08     4     depth       Z-depth for sorting
+$0C     4     w_recip     1/W for perspective
+$10     4     color       Computed vertex color
+$14-$34 32    [extended]  UV coords, flags, etc.
+```
+
+---
+
+## Track Data Format (❓ Hypothetical)
+
+**Warning:** This section is highly speculative, based on typical racing game patterns.
+
+### Track Header (❓ Hypothetical)
+
+```
+Offset  Size  Field
+------  ----  -----
+$00     4     track_id
+$04     4     segment_count
+$08     4     waypoint_ptr
+$0C     4     geometry_ptr
+$10     4     texture_ptr
+$14     4     palette_ptr
+$18     4     object_ptr      (trackside objects)
+$1C     4     collision_ptr
+```
+
+### Track Segment (❓ Hypothetical)
+
+```
+Offset  Size  Field
+------  ----  -----
+$00     4     start_distance
+$04     4     length
+$08     2     curvature       (signed: - = left, + = right)
+$0A     2     elevation       (signed: - = down, + = up)
+$0C     2     width
+$0E     2     surface_type
+$10     4     next_segment_ptr
+```
+
+---
+
+## Related Documentation
+
+- [STATE_MACHINES.md](STATE_MACHINES.md) - State machine details
+- [MEMORY_MAP.md](MEMORY_MAP.md) - Complete memory map
+- [MASTER_SLAVE_ANALYSIS.md](MASTER_SLAVE_ANALYSIS.md) - CPU synchronization and v2.3 protocol
+- [../graphics-vdp/32X_FRAME_BUFFER_FORMAT.md](../graphics-vdp/32X_FRAME_BUFFER_FORMAT.md) - VDP details
+- [../../disasm/SH2_SYMBOL_MAP.md](../../disasm/SH2_SYMBOL_MAP.md) - SH2 function symbols
+
+---
+
+**Document Status:** Reference document
+**Confidence:** Mixed - see individual sections
+**Last Updated:** 2026-01-23
