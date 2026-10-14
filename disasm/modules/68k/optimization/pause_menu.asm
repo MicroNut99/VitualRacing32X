@@ -61,6 +61,9 @@ PM_FB_LINE        equ   210             ; timing line: the black strip under the
 PM_FB_CHARS       equ   20
 PM_FB_X           equ   (320-PM_FB_CHARS*8)/2
 pm_fbpend         equ   PM_BASE+$23     ; .b bit 0/1: frame buffer 0/1 still to get the text
+pm_fblast         equ   PM_BASE+$60     ; 2 x 24 bytes: the text each frame buffer shows now
+                                        ; ($FF = unknown: draw that character again)
+pm_fbrows         equ   PM_BASE+$A0     ; 8 longs: where the text's 8 lines start
 PM_MARS_MODE    equ     $A15181         ; 32X bitmap mode, bit 7 = PRI
 PM_MARS_ADAPT   equ     $A15100         ; adapter control, bit 7 = FM (1: SH2 owns the 32X VDP)
 
@@ -217,7 +220,7 @@ pm_timing_update:
 .not_race:
         clr.b   (pm_drawn).l
         clr.b   (pm_fbpend).l
-        rts
+        bra     pm_fb_forget
 
 ; text into the 32X frame buffer the 68000 can reach (the one not shown),
 ; when the SH2 has finished its frame; each buffer once per new text
@@ -241,46 +244,75 @@ pm_fb_flush:
 .done:  rts
 
 ; the text at PM_BASE+$40 (PM_FB_CHARS characters) in white (32X colour 32)
-; on black (colour 1), lines PM_FB_LINE.., centred
+; on black (colour 1), lines PM_FB_LINE.., centred, into frame buffer d0 (0/1).
+; Only the characters that differ from what that buffer shows are drawn
+; (usually 1-3 a second), 2 long writes per glyph row: no lag frame.
 pm_fb_text:
-        lea     pm_font(pc),a3
-        moveq   #0,d7                           ; glyph row 0-7
-.row:   move.w  #PM_FB_LINE,d0
-        add.w   d7,d0
-        add.w   d0,d0
-        lea     (PM_FB).l,a1
-        moveq   #0,d1
+        movem.l a3-a6,-(sp)
+        lea     (pm_fblast).l,a4
+        tst.w   d0
+        beq.s   .b0
+        lea     24(a4),a4
+.b0:    lea     (PM_FB).l,a1                    ; the 8 line starts
+        lea     (pm_fbrows).l,a2
+        move.w  #PM_FB_LINE*2,d0
+        moveq   #7,d7
+.rp:    moveq   #0,d1
         move.w  (a1,d0.w),d1                    ; line table: line start in words
         add.l   d1,d1
-        adda.l  d1,a1
-        adda.w  #PM_FB_X,a1
+        add.l   a1,d1
+        addi.l  #PM_FB_X,d1
+        move.l  d1,(a2)+
+        addq.w  #2,d0
+        dbra    d7,.rp
         lea     (PM_BASE+$40).l,a0
-.ch:    moveq   #0,d2
-        move.b  (a0)+,d2
-        beq.s   .next
+        lea     pm_font(pc),a3
+        lea     pm_nib(pc),a5
+        moveq   #0,d6                           ; byte offset of this character
+.ch:    move.b  (a0)+,d2
+        beq.s   .done
+        cmp.b   (a4),d2
+        beq.s   .skip
+        move.b  d2,(a4)
+        andi.w  #$FF,d2
         subi.w  #$20,d2
         cmpi.w  #63,d2
         bls.s   .ok
         moveq   #0,d2
 .ok:    lsl.w   #3,d2
-        add.w   d7,d2
-        move.b  (a3,d2.w),d3                    ; this glyph row, MSB = left
-        moveq   #3,d4                           ; 4 pixel pairs
-.pair:  moveq   #1,d5
-        lsl.b   #1,d3
-        bcc.s   .l0
-        moveq   #32,d5
-.l0:    lsl.w   #8,d5
-        move.b  #1,d5
-        lsl.b   #1,d3
-        bcc.s   .r0
-        move.b  #32,d5
-.r0:    move.w  d5,(a1)+
-        dbra    d4,.pair
+        lea     (a3,d2.w),a6                    ; its 8 glyph rows, MSB = left
+        lea     (pm_fbrows).l,a2
+        moveq   #7,d7
+.r:     movea.l (a2)+,a1
+        adda.w  d6,a1
+        moveq   #0,d3
+        move.b  (a6)+,d3
+        move.w  d3,d4
+        lsr.w   #4,d3
+        andi.w  #15,d4
+        lsl.w   #2,d3
+        lsl.w   #2,d4
+        move.l  (a5,d3.w),(a1)+                 ; 4 pixels
+        move.l  (a5,d4.w),(a1)                  ; 4 pixels
+        dbra    d7,.r
+.skip:  addq.l  #1,a4
+        addq.w  #8,d6
         bra.s   .ch
-.next:  addq.w  #1,d7
-        cmpi.w  #8,d7
-        blo.s   .row
+.done:  movem.l (sp)+,a3-a6
+        rts
+
+; 4 pixels from a nibble (bit 3 = left): colour 32 set, colour 1 clear
+pm_nib: dc.l    $01010101,$01010120,$01012001,$01012020,$01200101,$01200120,$01202001,$01202020
+        dc.l    $20010101,$20010120,$20012001,$20012020,$20200101,$20200120,$20202001,$20202020
+
+; both frame buffers: what they show is unknown (draw everything again)
+pm_fb_forget:
+        movem.l d0/a0,-(sp)
+        lea     (pm_fblast).l,a0
+        moveq   #48/4-1,d0
+.f:     move.l  #$FFFFFFFF,(a0)+
+        dbra    d0,.f
+        movem.l (sp)+,d0/a0
         rts
 
 ; "FPS 20 68K 48% LAG 0" from the 3 words at (a2), padded to PM_FB_CHARS
@@ -587,7 +619,7 @@ pm_clear_menu:
         moveq   #1,d0                           ; 32X picture back (packed pixel mode)
         bsr     pm_set_mode
         st      (pm_dirty).l                    ; timing line back at once
-        rts
+        bra     pm_fb_forget
 
 ; ----------------------------------------------------------------------------
 ; pm_pause_tick: pause sub-state [08], once per pause cycle (main loop,

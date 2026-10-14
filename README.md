@@ -69,7 +69,7 @@ Tested in PicoDrive, Fusion 3.64 and on a real Genesis + 32X (V9). V3-V8 hung on
   menu code read a 32X video register without first taking it from the SH2s. Fixed; see
   KNOWN_ISSUES.md.
 
-## Pause menu (V3-V9)
+## Pause menu (V3-V10)
 
 Start during a 1-player race opens the menu (2-player races keep the game's own pause).
 The 32X picture is switched off while the menu is up, so the menu is always readable.
@@ -79,9 +79,9 @@ The 32X picture is switched off while the menu is up, so the menu is always read
 | CONTINUE | back to the race (the game's own unpause) |
 | RETRY COURSE | back to the course select with the same car and course; Start races again |
 | QUIT RACE | the game's own quit (A+B+C): to the result screen |
-| TIMING | on: the numbers below are also shown live during the race, bottom middle, in the black strip under the 3D view. They are drawn into both 32X frame buffers once a second (the 68000 takes the frame buffer for a moment after the SH2 finished its frame), which costs about 1 lag frame a second |
+| TIMING | on: the numbers below are also shown live during the race, bottom middle, in the black strip under the 3D view. They are drawn into both 32X frame buffers once a second (the 68000 takes the frame buffer for a moment after the SH2 finished its frame). Since V10 only the characters that changed are drawn: no lost frames (FPS 20, LAG 0 with the line on) |
 | `FPS 20 68K 48% LAG 0` | the last second before pausing: frames shown per second (32X frame-buffer swaps), 68000 busy time, frames where the 68000 was still busy at vblank |
-| `VR32X V9 10-13 22:12` | version and build time (month-day hour:minute, Pacific), written by the Makefile, so a screenshot shows which build ran |
+| `VR32X V10 10-13 22:38` | version and build time (month-day hour:minute, Pacific), written by the Makefile, so a screenshot shows which build ran |
 
 Up/Down choose, A, C or Start select, Left/Right also switch ON/OFF.
 
