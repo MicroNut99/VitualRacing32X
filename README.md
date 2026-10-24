@@ -35,14 +35,42 @@ The built ROM is byte-identical to an upstream build of the same commit.
 
 ## Build
 
-You need: Python 3, GNU make, `xxd`, the SH2 binutils (`sh-elf-as`, `sh-elf-ld`, `sh-elf-objcopy`)
-and a Linux-like shell (Linux, WSL, macOS).
+### What you need
+
+- A Linux-like shell (Linux, WSL, macOS) with GNU `make`, Python 3 and `xxd`.
+- The SH2 binutils: `sh-elf-as`, `sh-elf-ld`, `sh-elf-objcopy` on your `PATH`
+  (any sh-elf toolchain works, for example the one in the Sega toolchain 12.1).
+- vasm for the 68000 (`tools/vasmm68k_mot`, a Linux x86-64 build, is in the repo). On another system,
+  `make clean-all && make tools` downloads the vasm source and builds it (needs `wget`).
+- Your own Virtua Racing Deluxe ROM. The repo holds no Sega bytes; the build takes them from your ROM.
+
+### Steps
 
 1. Put your ROM at `roms/Virtua Racing Deluxe (USA).32x`
    (3,145,728 bytes, MD5 `72b1ad0f949f68da7d0a6339ecd51a3f`; the build checks it).
 2. `make all`
-3. Output: `build/vr_rebuild.32x` (4 MB). The old ROM is deleted first; if a step fails the build prints
-   `*** BUILD FAILED - NO ROM WAS WRITTEN ***` and leaves no ROM.
+3. Output: `build/vr_rebuild.32x` (4 MB, header checksum fixed). The old ROM is deleted first; if a step
+   fails the build prints `*** BUILD FAILED - NO ROM WAS WRITTEN ***` and leaves no ROM.
+
+### Switches
+
+All are `make` variables, for example `make all VR_VERSION=V12`.
+
+| Switch | Default | What it does |
+|---|---|---|
+| `ORIGINAL_ROM` | `roms/Virtua Racing Deluxe (USA).32x` | where your ROM is |
+| `VR_VERSION` | `V11` | the version shown in the pause menu, with the build time (`VR32X V11 mm-dd hh:mm`) |
+
+There are no other build switches: the pause menu's TIMING line is switched on and off in the game.
+
+### Other targets
+
+| Target | What it does |
+|---|---|
+| `make clean` | removes `build/`, the generated SH2 includes and `disasm/sections/` (made again from your ROM) |
+| `make clean-all` | `clean`, and removes vasm (`make tools` builds it again) |
+| `make sh2-assembly` | only assembles the SH2 sources into `disasm/sh2/generated/*.inc` |
+| `make help` | lists the remaining upstream targets (profiling, tests) |
 
 Tested in PicoDrive, Fusion 3.64 and on a real Genesis + 32X (V9). V3-V8 hung on real hardware after the logo (fixed in V9).
 
