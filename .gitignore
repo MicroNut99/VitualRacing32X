@@ -100,7 +100,6 @@ build/.gitkeep
 tools/libretro-profiling/*.csv
 tools/libretro-profiling/profiling_frontend
 tools/libretro-profiling/build_log.txt
-*.lds
 disasm/sections-mnemonic-backup-*/
 
 # Agent scratch space (ephemeral inter-agent communication, locks, scratchpads)
