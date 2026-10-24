@@ -46,11 +46,15 @@ The built ROM is byte-identical to an upstream build of the same commit.
 
 ### Steps
 
-1. Put your ROM at `roms/Virtua Racing Deluxe (USA).32x`
-   (3,145,728 bytes, MD5 `72b1ad0f949f68da7d0a6339ecd51a3f`; the build checks it).
-2. `make all`
-3. Output: `build/vr_rebuild.32x` (4 MB, header checksum fixed). The old ROM is deleted first; if a step
-   fails the build prints `*** BUILD FAILED - NO ROM WAS WRITTEN ***` and leaves no ROM.
+```
+PATH=/path/to/toolchain/sh-elf/bin:$PATH make all ORIGINAL_ROM="/path/to/Virtua Racing Deluxe (USA).32x"
+```
+
+Output: `build/vr_rebuild.32x` (4 MB, header checksum fixed). The ROM must be 3,145,728 bytes with MD5
+`72b1ad0f949f68da7d0a6339ecd51a3f` (the build checks it). If the sh-elf tools are already on your
+`PATH`, leave out the `PATH=...` part; if your ROM is at `roms/Virtua Racing Deluxe (USA).32x`, leave
+out `ORIGINAL_ROM=...` and just run `make all`. The old ROM is deleted first; if a step fails the build
+prints `*** BUILD FAILED - NO ROM WAS WRITTEN ***` and leaves no ROM.
 
 ### Switches
 
